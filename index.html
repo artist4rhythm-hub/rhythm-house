@@ -288,6 +288,15 @@ input,select{font-family:inherit;}
 .role-switch{position:fixed; top:12px; right:12px; z-index:40; background:var(--charcoal-3); border:1px solid var(--line); border-radius:20px; font-size:11px; padding:6px 12px; color:var(--ivory-dim);}
 .toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:var(--ivory); color:var(--charcoal); padding:11px 20px; border-radius:24px; font-size:13px; font-weight:500; z-index:60; opacity:0; transition:.25s; pointer-events:none; white-space:nowrap;}
 .toast.show{opacity:1;}
+/* 모달 폼 */
+.modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); z-index:100; display:flex; align-items:center; justify-content:center; padding:20px;}
+.modal-card{background:var(--charcoal-2); border:1px solid var(--line); border-radius:16px; padding:22px; width:100%; max-width:400px; max-height:88vh; overflow-y:auto;}
+.modal-title{font-family:'Anton',sans-serif; font-size:22px; margin-bottom:16px;}
+.form-label{display:block; font-size:12px; color:var(--ivory-dim); margin:12px 0 6px;}
+.form-input{width:100%; background:var(--charcoal-3); border:1px solid var(--line); border-radius:9px; padding:11px 12px; color:var(--ivory); font-size:14px;}
+.form-input:focus{outline:none; border-color:var(--gold);}
+.form-check{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ivory-dim); margin-top:14px; cursor:pointer;}
+.form-check input{width:18px; height:18px; accent-color:var(--red);}
 </style>
 <!-- Firebase SDK -->
 <script type="module">
@@ -296,7 +305,8 @@ input,select{font-family:inherit;}
     getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, doc, setDoc, getDoc, serverTimestamp
+    getFirestore, doc, setDoc, getDoc, serverTimestamp,
+    collection, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -316,7 +326,8 @@ input,select{font-family:inherit;}
   window.RH = {
     auth, db,
     GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-    doc, setDoc, getDoc, serverTimestamp
+    doc, setDoc, getDoc, serverTimestamp,
+    collection, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy
   };
 
   // 로그인 상태 변화 감지 → 앱에 알림
@@ -338,7 +349,7 @@ input,select{font-family:inherit;}
 
 <!-- ================= MAIN APP ================= -->
 <div id="appView" class="app" style="display:none;">
-  <button class="role-switch" onclick="toggleRole()" id="roleBtn">👤 이용자 화면</button>
+  <button class="role-switch" onclick="toggleRole()" id="roleBtn" style="display:none;">👤 이용자 화면</button>
 
   <div class="topbar">
     <img id="topLogo" class="top-logo" alt="Rhythm House">
@@ -568,12 +579,37 @@ input,select{font-family:inherit;}
     </div>
 
     <div id="adm-rooms" class="adm-pane" style="display:none;">
-      <div class="adm-item"><div><div class="t">A룸</div><div class="s">어쿠스틱 드럼</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-      <div class="adm-item"><div><div class="t">B룸</div><div class="s">전자 드럼</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
-      <div class="adm-item"><div><div class="t">C룸</div><div class="s">연습용</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
-      <div class="sec-label" style="margin-top:14px;">운영시간 적용 방식</div>
-      <div class="adm-item"><div class="t">통합 / 연습실별 / 요일별 / 월 휴무</div></div>
-      <div class="dashed-add" onclick="toast('연습실 추가 (개발 예정)')">＋ 연습실 추가</div>
+      <div class="step-sub" style="margin-bottom:12px;">연습실을 등록하면 이용자 예약 화면에 나타납니다.</div>
+      <div id="admRoomList"></div>
+      <div class="dashed-add" onclick="openRoomForm()">＋ 연습실 추가</div>
+    </div>
+
+    <!-- 연습실 추가/수정 폼 (모달) -->
+    <div id="roomFormOverlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeRoomForm()">
+      <div class="modal-card">
+        <div class="modal-title" id="roomFormTitle">연습실 추가</div>
+        <label class="form-label">연습실 이름</label>
+        <input class="form-input" id="rfName" placeholder="예: A룸">
+        <label class="form-label">악기 구성</label>
+        <input class="form-input" id="rfInstruments" placeholder="예: 펄 드럼셋, 세이비언 심벌">
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1;">
+            <label class="form-label">운영 시작</label>
+            <input class="form-input" id="rfOpen" type="time" value="09:00">
+          </div>
+          <div style="flex:1;">
+            <label class="form-label">운영 종료</label>
+            <input class="form-input" id="rfClose" type="time" value="22:00">
+          </div>
+        </div>
+        <label class="form-check">
+          <input type="checkbox" id="rfActive" checked> 활성 (예약 받기)
+        </label>
+        <div style="display:flex; gap:8px; margin-top:16px;">
+          <button class="cta cta-ghost" style="flex:1; margin:0;" onclick="closeRoomForm()">취소</button>
+          <button class="cta cta-primary" style="flex:1;" onclick="saveRoom()">저장</button>
+        </div>
+      </div>
     </div>
 
     <div id="adm-block" class="adm-pane" style="display:none;">
@@ -649,6 +685,7 @@ const LOGO_SRC="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAFACAYAAADNkK
 /* ---------------- In-memory data (Firebase 연결 전 프로토타입) ---------------- */
 let state = {
   role:'user',
+  viewMode:'user',    // 현재 보고 있는 화면 (admin 전환용)
   currentUser:null,   // Firebase 로그인 사용자
   bookingType:'practice',
   sel:{ date:null, room:null, slots:[] },
@@ -717,11 +754,8 @@ let state = {
     { id:'c5', date:'1/6 (토)', time:'11:00', dur:'30분/1시간', instructor:'현우 코치', open:true },
   ],
 };
-const rooms = [
-  { id:'A', name:'A룸', desc:'어쿠스틱 드럼', icon:'🥁' },
-  { id:'B', name:'B룸', desc:'전자 드럼', icon:'🎛️' },
-  { id:'C', name:'C룸', desc:'연습용', icon:'🎵' },
-];
+let rooms = [];  // Firebase에서 로드됨
+const roomIcons = ['🥁','🎛️','🎵','🎸','🎹'];  // 등록 순서대로 아이콘 배정
 const slots = ['18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30','22:00'];
 const takenSlots = ['18:00'];
 const blockedSlots = { time:'21:00', label:'차단' };
@@ -791,14 +825,29 @@ window.onFirebaseAuthChanged = async function(user){
 };
 
 // 앱 화면으로 진입 (로그인 성공 후)
-function enterApp(){
+async function enterApp(){
   document.getElementById('loginView').style.display='none';
   document.getElementById('appView').style.display='block';
   const nm = state.currentUser ? state.currentUser.name : '회원';
   document.getElementById('topChip').textContent = nm + '님';
   const hi = document.querySelector('#s-home .hi');
   if(hi) hi.innerHTML = `안녕하세요, <b>${nm}</b>님 🥁`;
-  renderHome();
+
+  // 관리자(admin)에게만 관리자 전환 버튼 노출
+  const isAdmin = (state.role === 'admin');
+  const roleBtn = document.getElementById('roleBtn');
+  if(isAdmin){
+    roleBtn.style.display = 'block';
+  } else {
+    roleBtn.style.display = 'none';
+    document.getElementById('navAdmin').style.display = 'none';
+  }
+  state.viewMode = 'user';
+
+  // 연습실 목록 로드 (예약 화면에서 사용)
+  await loadRooms();
+
+  go('home');
 }
 
 // 로그아웃
@@ -810,10 +859,11 @@ function confirmLogout(){
   if(confirm('로그아웃 하시겠어요?')) logout();
 }
 function toggleRole(){
-  state.role = state.role==='user' ? 'admin' : 'user';
+  // admin만 이 버튼이 보이므로, 이용자/관리자 화면 전환용
+  state.viewMode = (state.viewMode==='admin') ? 'user' : 'admin';
   const btn=document.getElementById('roleBtn');
   const navAdmin=document.getElementById('navAdmin');
-  if(state.role==='admin'){
+  if(state.viewMode==='admin'){
     btn.textContent='🛠️ 관리자 화면';
     navAdmin.style.display='flex';
     document.getElementById('topChip').textContent='관리자';
@@ -1032,10 +1082,16 @@ function renderDates(){
 }
 function pickDate(i){ state.sel.date=i; state.sel.slots=[]; renderDates(); renderSlots(); updateSelBar(); }
 function renderRooms(){
-  document.getElementById('roomList').innerHTML=rooms.map(r=>`
+  const activeRooms = rooms.filter(r => r.active);
+  const wrap = document.getElementById('roomList');
+  if(activeRooms.length === 0){
+    wrap.innerHTML = '<div class="empty">현재 예약 가능한 연습실이 없어요.</div>';
+    return;
+  }
+  wrap.innerHTML = activeRooms.map(r=>`
     <div class="room-cell ${state.sel.room===r.id?'on':''}" onclick="pickRoom('${r.id}')">
       <div class="ic">${r.icon}</div>
-      <div><div class="nm">${r.name}</div><div class="ds">${r.desc}</div></div>
+      <div><div class="nm">${r.name}</div><div class="ds">${r.desc||'악기 정보 없음'}</div></div>
     </div>`).join('');
 }
 function pickRoom(id){ state.sel.room=id; state.sel.slots=[]; renderRooms(); renderSlots(); updateSelBar(); }
@@ -1128,6 +1184,129 @@ function admTab(name, el){
   document.getElementById('adm-'+name).style.display='block';
   if(name==='coaching') renderAdmCoach();
   if(name==='plans') renderAdmPlans();
+  if(name==='rooms') renderAdmRooms();
+}
+
+/* ---------------- 연습실 (Firebase 연동) ---------------- */
+// Firebase에서 연습실 목록 불러오기
+async function loadRooms(){
+  try{
+    const q = window.RH.query(
+      window.RH.collection(window.RH.db, 'rooms'),
+      window.RH.orderBy('createdAt')
+    );
+    const snap = await window.RH.getDocs(q);
+    rooms = snap.docs.map((d, i) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        name: data.name,
+        desc: data.instruments || '',
+        instruments: data.instruments || '',
+        open: data.open || '09:00',
+        close: data.close || '22:00',
+        active: data.active !== false,
+        icon: roomIcons[i % roomIcons.length]
+      };
+    });
+  }catch(e){
+    console.error('연습실 로드 오류', e);
+    rooms = [];
+  }
+}
+
+// 관리자 연습실 목록 렌더링
+function renderAdmRooms(){
+  const wrap = document.getElementById('admRoomList');
+  if(rooms.length === 0){
+    wrap.innerHTML = '<div class="empty">등록된 연습실이 없어요. 아래 버튼으로 추가하세요.</div>';
+    return;
+  }
+  wrap.innerHTML = rooms.map(r => `
+    <div class="adm-item">
+      <div style="flex:1;">
+        <div class="t">${r.name} ${r.active?'':'<span style="color:var(--ivory-mute); font-size:11px;">(비활성)</span>'}</div>
+        <div class="s">${r.instruments || '악기 정보 없음'} · ${r.open}~${r.close}</div>
+      </div>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="mini-btn" style="flex:0; padding:6px 10px;" onclick="openRoomForm('${r.id}')">수정</button>
+        <button class="mini-btn danger" style="flex:0; padding:6px 10px;" onclick="removeRoom('${r.id}','${r.name.replace(/'/g,"")}')">삭제</button>
+      </div>
+    </div>`).join('');
+}
+
+// 연습실 추가/수정 폼 열기
+let editingRoomId = null;
+function openRoomForm(id){
+  editingRoomId = id || null;
+  const title = document.getElementById('roomFormTitle');
+  if(id){
+    const r = rooms.find(x => x.id === id);
+    title.textContent = '연습실 수정';
+    document.getElementById('rfName').value = r.name;
+    document.getElementById('rfInstruments').value = r.instruments || '';
+    document.getElementById('rfOpen').value = r.open;
+    document.getElementById('rfClose').value = r.close;
+    document.getElementById('rfActive').checked = r.active;
+  } else {
+    title.textContent = '연습실 추가';
+    document.getElementById('rfName').value = '';
+    document.getElementById('rfInstruments').value = '';
+    document.getElementById('rfOpen').value = '09:00';
+    document.getElementById('rfClose').value = '22:00';
+    document.getElementById('rfActive').checked = true;
+  }
+  document.getElementById('roomFormOverlay').style.display = 'flex';
+}
+function closeRoomForm(){
+  document.getElementById('roomFormOverlay').style.display = 'none';
+  editingRoomId = null;
+}
+
+// 연습실 저장 (추가 또는 수정)
+async function saveRoom(){
+  const name = document.getElementById('rfName').value.trim();
+  const instruments = document.getElementById('rfInstruments').value.trim();
+  const open = document.getElementById('rfOpen').value;
+  const close = document.getElementById('rfClose').value;
+  const active = document.getElementById('rfActive').checked;
+  if(!name){ toast('연습실 이름을 입력해주세요'); return; }
+
+  try{
+    if(editingRoomId){
+      // 수정
+      const ref = window.RH.doc(window.RH.db, 'rooms', editingRoomId);
+      await window.RH.updateDoc(ref, { name, instruments, open, close, active });
+      toast('연습실이 수정되었어요');
+    } else {
+      // 추가
+      await window.RH.addDoc(window.RH.collection(window.RH.db, 'rooms'), {
+        name, instruments, open, close, active,
+        createdAt: window.RH.serverTimestamp()
+      });
+      toast('연습실이 추가되었어요');
+    }
+    closeRoomForm();
+    await loadRooms();
+    renderAdmRooms();
+  }catch(e){
+    console.error('연습실 저장 오류', e);
+    toast('저장에 실패했어요. 다시 시도해주세요');
+  }
+}
+
+// 연습실 삭제
+async function removeRoom(id, name){
+  if(!confirm(`"${name}" 연습실을 삭제할까요?`)) return;
+  try{
+    await window.RH.deleteDoc(window.RH.doc(window.RH.db, 'rooms', id));
+    toast('연습실이 삭제되었어요');
+    await loadRooms();
+    renderAdmRooms();
+  }catch(e){
+    console.error('연습실 삭제 오류', e);
+    toast('삭제에 실패했어요');
+  }
 }
 function renderAdmPlans(){
   const wrap=document.getElementById('admPlanList');
