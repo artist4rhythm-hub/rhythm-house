@@ -905,20 +905,29 @@ function renderHistory(){
 }
 
 /* ---------------- Home ---------------- */
-function renderHome(){
+async function renderHome(){
   // 멤버십 상태에 현재 플랜명 반영
   const myPlan=state.plans.find(p=>p.id===state.myPlan);
   const mb=document.getElementById('mbStatus');
-  if(mb && myPlan) mb.innerHTML=`${myPlan.name} · 1월 31일까지`;
+  if(mb && myPlan) mb.innerHTML=`${myPlan.name} · 이용 중`;
 
   const list=document.getElementById('upcomingList');
-  const up=state.reservations.filter(r=>r.status==='confirm');
-  if(up.length===0){ list.innerHTML='<div class="empty">예약이 없어요. 연습실을 예약해보세요!</div>'; return; }
-  list.innerHTML=up.map(r=>`
-    <div class="up-card">
-      <div><div class="when">${r.date} ${r.time}</div><div class="meta">${r.room} · ${r.type==='coaching'?'코칭':'연습'}</div></div>
-      <span style="font-size:18px;">${r.type==='coaching'?'🎯':'🥁'}</span>
-    </div>`).join('');
+  list.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const snap = await window.RH.getDocs(window.RH.collection(window.RH.db, 'reservations'));
+    const today=new Date(); today.setHours(0,0,0,0);
+    const up = snap.docs.map(d=>({id:d.id, ...d.data()}))
+      .filter(r=> r.userId===state.currentUser.uid && r.status==='confirmed'
+        && new Date(r.date+'T00:00:00') >= today)
+      .sort((a,b)=> (a.date+a.startTime).localeCompare(b.date+b.startTime))
+      .slice(0,5);
+    if(up.length===0){ list.innerHTML='<div class="empty">예약이 없어요. 연습실을 예약해보세요!</div>'; return; }
+    list.innerHTML=up.map(r=>`
+      <div class="up-card">
+        <div><div class="when">${fmtDateLabel(r.date)} ${r.startTime}~${r.endTime}</div><div class="meta">${r.roomName} · ${r.type==='coaching'?'코칭':'연습'}</div></div>
+        <span style="font-size:18px;">${r.type==='coaching'?'🎯':'🥁'}</span>
+      </div>`).join('');
+  }catch(e){ console.error(e); list.innerHTML='<div class="empty">예약을 불러오지 못했어요.</div>'; }
 }
 
 /* ---------------- 이용권 확장 패널 ---------------- */
@@ -1073,14 +1082,38 @@ function renderDates(){
   for(let i=0;i<10;i++){
     const d=new Date(today); d.setDate(today.getDate()+i);
     const on=i===state.sel.date?'on':'';
-    const dis=i===6?'dis':''; // 예시로 특정일 휴무
-    html+=`<div class="date-cell ${on} ${dis}" onclick="${dis?'':'pickDate('+i+')'}">
+    html+=`<div class="date-cell ${on}" onclick="pickDate(${i})">
       <div class="dow">${i===0?'오늘':dows[d.getDay()]}</div>
       <div class="dd">${d.getDate()}</div></div>`;
   }
   document.getElementById('dateRow').innerHTML=html;
 }
-function pickDate(i){ state.sel.date=i; state.sel.slots=[]; renderDates(); renderSlots(); updateSelBar(); }
+// 선택한 날짜 인덱스를 실제 날짜 문자열(YYYY-MM-DD)로
+function selectedDateStr(){
+  const today=new Date();
+  const d=new Date(today); d.setDate(today.getDate()+(state.sel.date||0));
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+function selectedDateLabel(){
+  const dows=['일','월','화','수','목','금','토'];
+  const today=new Date();
+  const d=new Date(today); d.setDate(today.getDate()+(state.sel.date||0));
+  return `${d.getMonth()+1}/${d.getDate()} (${dows[d.getDay()]})`;
+}
+// 연습실 운영시간으로 30분 슬롯 목록 생성
+function buildSlots(room){
+  if(!room) return slots;
+  const [oh,om]=room.open.split(':').map(Number);
+  const [ch,cm]=room.close.split(':').map(Number);
+  let start=oh*60+om, end=ch*60+cm;
+  const arr=[];
+  for(let t=start; t<end; t+=30){
+    arr.push(`${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
+  }
+  return arr;
+}
+function pickDate(i){ state.sel.date=i; state.sel.slots=[]; renderDates(); loadTakenAndRenderSlots(); updateSelBar(); }
 function renderRooms(){
   const activeRooms = rooms.filter(r => r.active);
   const wrap = document.getElementById('roomList');
@@ -1094,11 +1127,40 @@ function renderRooms(){
       <div><div class="nm">${r.name}</div><div class="ds">${r.desc||'악기 정보 없음'}</div></div>
     </div>`).join('');
 }
-function pickRoom(id){ state.sel.room=id; state.sel.slots=[]; renderRooms(); renderSlots(); updateSelBar(); }
+function pickRoom(id){ state.sel.room=id; state.sel.slots=[]; renderRooms(); loadTakenAndRenderSlots(); updateSelBar(); }
+
+// 선택한 날짜+연습실의 이미 예약된 슬롯을 Firebase에서 불러오고 슬롯 그리기
+let takenSlotsNow = [];
+async function loadTakenAndRenderSlots(){
+  takenSlotsNow = [];
+  const grid = document.getElementById('slotGrid');
+  if(state.sel.room){
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">불러오는 중…</div>';
+    try{
+      const dateStr = selectedDateStr();
+      const q = window.RH.query(
+        window.RH.collection(window.RH.db, 'reservations')
+      );
+      const snap = await window.RH.getDocs(q);
+      snap.docs.forEach(d=>{
+        const r=d.data();
+        if(r.roomId===state.sel.room && r.date===dateStr && r.status==='confirmed'){
+          (r.slots||[]).forEach(s=>takenSlotsNow.push(s));
+        }
+      });
+    }catch(e){ console.error('예약 조회 오류', e); }
+  }
+  renderSlots();
+}
 function renderSlots(){
-  document.getElementById('slotGrid').innerHTML=slots.map(t=>{
-    if(takenSlots.includes(t)) return `<div class="slot taken">${t}</div>`;
-    if(t===blockedSlots.time) return `<div class="slot blocked">${t}<span class="tag">${blockedSlots.label}</span></div>`;
+  const room = rooms.find(r=>r.id===state.sel.room);
+  if(!room){
+    document.getElementById('slotGrid').innerHTML='<div class="empty" style="grid-column:1/-1;">연습실을 먼저 선택해주세요</div>';
+    return;
+  }
+  const list = buildSlots(room);
+  document.getElementById('slotGrid').innerHTML=list.map(t=>{
+    if(takenSlotsNow.includes(t)) return `<div class="slot taken">${t}</div>`;
     const on=state.sel.slots.includes(t)?'on':'';
     return `<div class="slot ${on}" onclick="toggleSlot('${t}')">${t}</div>`;
   }).join('');
@@ -1122,58 +1184,110 @@ function updateSelBar(){
   document.getElementById('selSub').textContent = state.bookingType==='coaching'?'코칭권 1회 차감':`연습권 ${dur.trim()} 차감`;
   bar.style.display='flex';
 }
-function confirmBooking(){
+async function confirmBooking(){
+  if(!state.sel.room || state.sel.slots.length===0){ toast('연습실과 시간을 선택해주세요'); return; }
+  const room = rooms.find(r=>r.id===state.sel.room);
+  const list = buildSlots(room);
   const mins=state.sel.slots.length*30;
   const h=Math.floor(mins/60), m=mins%60;
   const dur=(h?h+'시간':'')+(m?' '+m+'분':'');
-  const roomName=rooms.find(r=>r.id===state.sel.room).name;
-  const first=state.sel.slots[0];
-  const last=state.sel.slots[state.sel.slots.length-1];
-  const endIdx=slots.indexOf(last)+1;
-  const end=slots[endIdx]||'22:30';
+  const roomName=room.name;
+  const sorted=[...state.sel.slots].sort();
+  const first=sorted[0];
+  const last=sorted[sorted.length-1];
+  const endIdx=list.indexOf(last)+1;
+  const end=list[endIdx] || (()=>{ const [hh,mm]=last.split(':').map(Number); const e=hh*60+mm+30; return `${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`; })();
+  const dateStr = selectedDateStr();
+
+  // 중복 예약 재확인 (저장 직전)
+  try{
+    const snap = await window.RH.getDocs(window.RH.collection(window.RH.db, 'reservations'));
+    const conflict = snap.docs.some(d=>{
+      const r=d.data();
+      return r.roomId===state.sel.room && r.date===dateStr && r.status==='confirmed'
+        && (r.slots||[]).some(s=>sorted.includes(s));
+    });
+    if(conflict){ toast('방금 다른 분이 예약했어요. 시간을 다시 선택해주세요'); loadTakenAndRenderSlots(); return; }
+
+    // 저장
+    await window.RH.addDoc(window.RH.collection(window.RH.db, 'reservations'), {
+      roomId: state.sel.room,
+      roomName: roomName,
+      userId: state.currentUser.uid,
+      userName: state.currentUser.name,
+      type: state.bookingType,
+      date: dateStr,
+      startTime: first,
+      endTime: end,
+      slots: sorted,
+      status: 'confirmed',
+      createdAt: window.RH.serverTimestamp()
+    });
+  }catch(e){
+    console.error('예약 저장 오류', e);
+    toast('예약 저장에 실패했어요. 다시 시도해주세요');
+    return;
+  }
+
   document.getElementById('confirmCard').innerHTML=`
     <div class="r"><span class="k">연습실</span><span>${roomName}</span></div>
     <div class="r"><span class="k">유형</span><span>${state.bookingType==='coaching'?'드럼 코칭':'연습'}</span></div>
+    <div class="r"><span class="k">날짜</span><span>${selectedDateLabel()}</span></div>
     <div class="r"><span class="k">시간</span><span>${first} ~ ${end} (${dur.trim()})</span></div>
     <div class="r"><span class="k">차감</span><span>${state.bookingType==='coaching'?'코칭권 1회':'연습권 '+dur.trim()}</span></div>`;
-  // add to reservations
-  state.reservations.unshift({
-    id:Date.now(), type:state.bookingType, date:'예약일', dow:'', time:`${first}~${end}`,
-    room:roomName, status:'confirm', cancelable:true
-  });
   go('confirm');
 }
 
-/* ---------------- My reservations ---------------- */
-function renderMine(){
+/* ---------------- My reservations (Firebase) ---------------- */
+let myReservations = [];
+async function renderMine(){
   const list=document.getElementById('mineList');
-  if(state.reservations.length===0){ list.innerHTML='<div class="empty">예약 내역이 없어요.</div>'; return; }
-  list.innerHTML=state.reservations.map(r=>{
-    const badge = r.status==='wait'
-      ? `<span class="badge b-wait">대기 ${r.rank}번</span>`
-      : `<span class="badge b-confirm">확정</span>`;
-    const actions = r.status==='confirm' ? `
+  list.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const snap = await window.RH.getDocs(window.RH.collection(window.RH.db, 'reservations'));
+    myReservations = snap.docs
+      .map(d=>({ id:d.id, ...d.data() }))
+      .filter(r=> r.userId===state.currentUser.uid && r.status==='confirmed')
+      .sort((a,b)=> (a.date+a.startTime).localeCompare(b.date+b.startTime));
+  }catch(e){ console.error(e); list.innerHTML='<div class="empty">예약을 불러오지 못했어요.</div>'; return; }
+
+  if(myReservations.length===0){ list.innerHTML='<div class="empty">예약 내역이 없어요.</div>'; return; }
+
+  const now=new Date();
+  list.innerHTML=myReservations.map(r=>{
+    // 취소 가능 여부: 시작 3시간 전까지
+    const start=new Date(`${r.date}T${r.startTime}:00`);
+    const cancelable = (start - now) > 3*60*60*1000;
+    const dateLabel = fmtDateLabel(r.date);
+    const actions = `
       <div class="res-actions">
-        <button class="mini-btn ${r.cancelable?'danger':'dis'}" onclick="${r.cancelable?`cancelRes(${r.id})`:`toast('취소 마감 시간이 지났어요')`}">
-          ${r.cancelable?'예약 취소':'취소 불가'}
+        <button class="mini-btn ${cancelable?'danger':'dis'}"
+          onclick="${cancelable?`cancelRes('${r.id}')`:`toast('취소 마감 시간이 지났어요 (시작 3시간 전까지)')`}">
+          ${cancelable?'예약 취소':'취소 불가'}
         </button>
-      </div>` : `
-      <div class="res-actions">
-        <button class="mini-btn danger" onclick="cancelRes(${r.id})">대기 취소</button>
       </div>`;
     return `<div class="res-card">
       <div class="res-top">
-        <div><div class="res-when">${r.date} ${r.time}</div>
-        <div class="res-meta">${r.room} · ${r.type==='coaching'?'드럼 코칭':'연습'}</div></div>
-        ${badge}
+        <div><div class="res-when">${dateLabel} ${r.startTime}~${r.endTime}</div>
+        <div class="res-meta">${r.roomName} · ${r.type==='coaching'?'드럼 코칭':'연습'}</div></div>
+        <span class="badge b-confirm">확정</span>
       </div>${actions}
     </div>`;
   }).join('');
 }
-function cancelRes(id){
-  state.reservations=state.reservations.filter(r=>r.id!==id);
-  toast('예약이 취소되었습니다');
-  renderMine();
+function fmtDateLabel(dateStr){
+  const dows=['일','월','화','수','목','금','토'];
+  const d=new Date(dateStr+'T00:00:00');
+  return `${d.getMonth()+1}/${d.getDate()} (${dows[d.getDay()]})`;
+}
+async function cancelRes(id){
+  if(!confirm('예약을 취소할까요?')) return;
+  try{
+    // 상태를 cancelled로 변경 (기록 보존)
+    await window.RH.updateDoc(window.RH.doc(window.RH.db, 'reservations', id), { status:'cancelled' });
+    toast('예약이 취소되었습니다');
+    renderMine();
+  }catch(e){ console.error(e); toast('취소에 실패했어요'); }
 }
 
 /* ---------------- Admin tabs ---------------- */
