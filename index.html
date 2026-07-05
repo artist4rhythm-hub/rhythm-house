@@ -376,6 +376,16 @@ input,select{font-family:inherit;}
 .ms-info{flex:1;}
 .ms-when{font-size:12px;}
 .ms-applied{font-size:11px; color:var(--ivory-mute); margin-top:2px;}
+/* 내 예약 주간 뷰 */
+.mine-week{display:flex; flex-direction:column; gap:8px;}
+.mw-day{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:10px; padding:10px 12px;}
+.mw-day.today{border-color:var(--red-soft);}
+.mw-date{font-size:12px; font-weight:500; margin-bottom:6px;}
+.mw-day.today .mw-date{color:var(--red-soft);}
+.mw-empty{font-size:11px; color:var(--ivory-mute);}
+.mw-event{font-size:12px; padding:5px 8px; border-radius:6px; margin-top:4px; color:#fff;}
+.mw-event.practice{background:linear-gradient(135deg,var(--red),var(--red-dark));}
+.mw-event.coaching{background:linear-gradient(135deg,var(--gold),#A8781F); color:#1A1817;}
 /* ============ 반응형: 패드 · 컴퓨터 (큰 화면) ============ */
 @media (min-width: 620px){
   /* 큰 화면에서 배경으로 앱을 감싸기 */
@@ -654,7 +664,19 @@ input,select{font-family:inherit;}
 
   <!-- ===== USER: MY RESERVATIONS ===== -->
   <div id="s-mine" class="screen">
-    <div class="step-title" style="margin-bottom:16px;">내 예약</div>
+    <div class="step-title" style="margin-bottom:14px;">내 예약</div>
+    <div class="sched-viewtabs" id="mineViewTabs">
+      <button class="on" onclick="setMineView('list',this)">목록</button>
+      <button onclick="setMineView('day',this)">일별</button>
+      <button onclick="setMineView('week',this)">주간</button>
+      <button onclick="setMineView('month',this)">월별</button>
+    </div>
+    <div id="mineNav" class="sched-head" style="display:none;">
+      <button class="cal-nav" onclick="mineMove(-1)">‹</button>
+      <div class="sched-title" id="mineTitle">날짜</div>
+      <button class="cal-nav" onclick="mineMove(1)">›</button>
+    </div>
+    <div id="mineTodayBtn" class="sched-today-btn" style="display:none;" onclick="mineToday()">오늘로</div>
     <div id="mineList"></div>
   </div>
 
@@ -1522,6 +1544,25 @@ async function confirmBooking(){
 
 /* ---------------- My reservations (Firebase) ---------------- */
 let myReservations = [];
+let mineView = 'list';
+let mineDate = new Date();
+function setMineView(v, el){
+  mineView=v;
+  document.querySelectorAll('#mineViewTabs button').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  const showNav = (v!=='list');
+  document.getElementById('mineNav').style.display = showNav?'flex':'none';
+  document.getElementById('mineTodayBtn').style.display = showNav?'inline-block':'none';
+  renderMine();
+}
+function mineMove(dir){
+  if(mineView==='day') mineDate.setDate(mineDate.getDate()+dir);
+  else if(mineView==='week') mineDate.setDate(mineDate.getDate()+dir*7);
+  else if(mineView==='month') mineDate.setMonth(mineDate.getMonth()+dir);
+  renderMine();
+}
+function mineToday(){ mineDate=new Date(); renderMine(); }
+
 async function renderMine(){
   const list=document.getElementById('mineList');
   list.innerHTML='<div class="empty">불러오는 중…</div>';
@@ -1533,11 +1574,16 @@ async function renderMine(){
       .sort((a,b)=> (a.date+a.startTime).localeCompare(b.date+b.startTime));
   }catch(e){ console.error(e); list.innerHTML='<div class="empty">예약을 불러오지 못했어요.</div>'; return; }
 
-  if(myReservations.length===0){ list.innerHTML='<div class="empty">예약 내역이 없어요.</div>'; return; }
+  if(mineView==='list') renderMineList(list);
+  else if(mineView==='day') renderMineDay(list);
+  else if(mineView==='week') renderMineWeek(list);
+  else if(mineView==='month') renderMineMonth(list);
+}
 
+function renderMineList(list){
+  if(myReservations.length===0){ list.innerHTML='<div class="empty">예약 내역이 없어요.</div>'; return; }
   const now=new Date();
   list.innerHTML=myReservations.map(r=>{
-    // 취소 가능 여부: 시작 3시간 전까지
     const start=new Date(`${r.date}T${r.startTime}:00`);
     const cancelable = (start - now) > 3*60*60*1000;
     const dateLabel = fmtDateLabel(r.date);
@@ -1556,6 +1602,82 @@ async function renderMine(){
       </div>${actions}
     </div>`;
   }).join('');
+}
+
+// 일별: 그날 내 예약을 시간순 카드로
+function renderMineDay(list){
+  const dows=['일','월','화','수','목','금','토'];
+  document.getElementById('mineTitle').textContent=`${mineDate.getMonth()+1}월 ${mineDate.getDate()}일 (${dows[mineDate.getDay()]})`;
+  const ds=ymd(mineDate);
+  const day=myReservations.filter(r=>r.date===ds);
+  if(day.length===0){ list.innerHTML='<div class="empty">이 날은 예약이 없어요.</div>'; return; }
+  list.innerHTML=day.map(r=>`
+    <div class="res-card">
+      <div class="res-top">
+        <div><div class="res-when">${r.startTime}~${r.endTime}</div>
+        <div class="res-meta">${r.roomName} · ${r.type==='coaching'?'드럼 코칭':'연습'}</div></div>
+        <span class="badge ${r.type==='coaching'?'b-wait':'b-confirm'}">${r.type==='coaching'?'코칭':'확정'}</span>
+      </div>
+    </div>`).join('');
+}
+
+// 주간: 요일별로 내 예약 나열
+function renderMineWeek(list){
+  const dows=['일','월','화','수','목','금','토'];
+  const start=new Date(mineDate); start.setDate(start.getDate()-start.getDay());
+  const end=new Date(start); end.setDate(start.getDate()+6);
+  document.getElementById('mineTitle').textContent=`${start.getMonth()+1}/${start.getDate()} ~ ${end.getMonth()+1}/${end.getDate()}`;
+  const todayStr=ymd(new Date());
+  let html='<div class="mine-week">';
+  for(let i=0;i<7;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i); const ds=ymd(d);
+    const day=myReservations.filter(r=>r.date===ds).sort((a,b)=>a.startTime.localeCompare(b.startTime));
+    html+=`<div class="mw-day ${ds===todayStr?'today':''}">
+      <div class="mw-date">${dows[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}</div>`;
+    if(day.length===0) html+='<div class="mw-empty">예약 없음</div>';
+    else day.forEach(r=>{ html+=`<div class="mw-event ${r.type==='coaching'?'coaching':'practice'}">${r.startTime}~${r.endTime} · ${r.roomName} ${r.type==='coaching'?'(코칭)':''}</div>`; });
+    html+='</div>';
+  }
+  html+='</div>';
+  list.innerHTML=html;
+}
+
+// 월별: 달력에 내 예약 표시, 날짜 클릭 시 일별로
+function renderMineMonth(list){
+  const y=mineDate.getFullYear(), m=mineDate.getMonth();
+  document.getElementById('mineTitle').textContent=`${y}년 ${m+1}월`;
+  const first=new Date(y,m,1).getDay();
+  const days=new Date(y,m+1,0).getDate();
+  const todayStr=ymd(new Date());
+  const byDate={};
+  myReservations.forEach(r=>{ const d=new Date(r.date+'T00:00:00'); if(d.getFullYear()===y&&d.getMonth()===m){ (byDate[r.date]=byDate[r.date]||{practice:0,coaching:0})[r.type==='coaching'?'coaching':'practice']++; } });
+  const dows=['일','월','화','수','목','금','토'];
+  let html='<div class="month-grid">';
+  dows.forEach(d=>html+=`<div class="mg-dow">${d}</div>`);
+  for(let i=0;i<first;i++) html+='<div class="mg-cell empty"></div>';
+  for(let dd=1;dd<=days;dd++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    const c=byDate[ds]; const total=c?(c.practice+c.coaching):0;
+    let bars='';
+    if(c){ for(let i=0;i<Math.min(c.practice,3);i++) bars+='<div class="mg-bar practice"></div>'; for(let i=0;i<Math.min(c.coaching,3);i++) bars+='<div class="mg-bar coaching"></div>'; }
+    html+=`<div class="mg-cell ${ds===todayStr?'today':''}" ${total?`onclick="mineGoDay('${ds}')" style="cursor:pointer;"`:''}>
+      <div class="mg-date">${dd}</div>
+      ${total?`<div class="mg-count">${total}건</div>`:''}
+      <div class="mg-bars">${bars}</div>
+    </div>`;
+  }
+  html+='</div>';
+  list.innerHTML=html;
+}
+function mineGoDay(ds){
+  mineDate=new Date(ds+'T00:00:00');
+  mineView='day';
+  const tabs=document.querySelectorAll('#mineViewTabs button');
+  tabs.forEach(b=>b.classList.remove('on'));
+  tabs[1].classList.add('on');
+  document.getElementById('mineNav').style.display='flex';
+  document.getElementById('mineTodayBtn').style.display='inline-block';
+  renderMine();
 }
 function fmtDateLabel(dateStr){
   const dows=['일','월','화','수','목','금','토'];
