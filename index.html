@@ -327,6 +327,67 @@ input,select{font-family:inherit;}
 .daycal-now{position:absolute; left:44px; right:0; height:2px; background:var(--red-soft); z-index:5; pointer-events:none;}
 .daycal-now::before{content:""; position:absolute; left:0; top:-4px; width:9px; height:9px; border-radius:50%; background:var(--red-soft);}
 .daycal-now-label{position:absolute; left:2px; transform:translateY(-50%); font-size:9px; color:#fff; background:var(--red-soft); border-radius:4px; padding:1px 4px; z-index:6;}
+/* 예약 차단 드래그 그리드 */
+.blk-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:4px; user-select:none; touch-action:none;}
+.blk-slot{padding:9px 0; text-align:center; font-size:12px; border-radius:7px; border:1px solid var(--line); background:var(--charcoal-2); cursor:pointer; transition:.08s;}
+.blk-slot.sel{background:var(--gold); border-color:var(--gold); color:#1A1817; font-weight:500;}
+.blk-slot.booked{background:rgba(196,52,47,.15); border-color:rgba(196,52,47,.35); color:var(--red-soft); cursor:not-allowed;}
+.blk-slot.blocked{background:var(--charcoal-3); border-color:var(--line); color:var(--ivory-mute); cursor:not-allowed; text-decoration:line-through;}
+/* ============ 반응형: 패드 · 컴퓨터 (큰 화면) ============ */
+@media (min-width: 620px){
+  /* 큰 화면에서 배경으로 앱을 감싸기 */
+  body{
+    background:
+      radial-gradient(circle at 20% 20%, rgba(196,52,47,.06), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(217,164,65,.05), transparent 40%),
+      var(--charcoal);
+    padding:24px 0;
+  }
+  /* 이용자 앱: 폰 크기 유지하되 카드처럼 */
+  .app{
+    max-width:460px;
+    min-height:calc(100vh - 48px);
+    border:1px solid var(--line);
+    border-radius:22px;
+    overflow:hidden;
+    box-shadow:0 24px 70px rgba(0,0,0,.5);
+  }
+  .topbar{border-radius:22px 22px 0 0;}
+  /* 하단 네비를 앱 카드 안에 고정 */
+  .botnav{
+    max-width:460px;
+    border-radius:0 0 22px 22px;
+  }
+  /* 관리자 화면일 때는 더 넓게 (가로 활용 시작) */
+  .app.admin-wide{
+    max-width:920px;
+  }
+  .app.admin-wide .botnav{ max-width:920px; }
+}
+
+/* ============ 관리자 넓은 화면 레이아웃 (B의 기초) ============ */
+@media (min-width: 720px){
+  /* 관리자 통계: 카드 사이 간격 여유 */
+  .admin-wide .adm-stat-row{ gap:14px; }
+  /* 관리자 대시보드 캘린더를 넓게 */
+  .admin-wide .daycal{ padding:12px 12px 12px 0; }
+  .admin-wide .daycal-row{ height:52px; }
+  /* 탭바 넉넉하게 */
+  .admin-wide .tabbar button{ font-size:13px; padding:9px 16px; }
+  /* 예약 현황 타임라인 열 넓게 */
+  .admin-wide .tl-col{ min-width:130px; }
+}
+
+/* 아주 큰 화면에서도 이용자 폼은 과하게 커지지 않게 */
+@media (min-width: 1100px){
+  .app.admin-wide{ max-width:1040px; }
+  .app.admin-wide .botnav{ max-width:1040px; }
+}
+/* 관리자 전환 버튼: 큰 화면에선 살짝 안쪽으로 */
+@media (min-width: 620px){
+  .role-switch{ top:36px; right:calc(50% - 214px); }
+  .admin-wide ~ .role-switch, .app.admin-wide .role-switch{ right:36px; }
+}
 </style>
 <!-- Firebase SDK -->
 <script type="module">
@@ -664,11 +725,33 @@ input,select{font-family:inherit;}
     </div>
 
     <div id="adm-block" class="adm-pane" style="display:none;">
-      <div class="sec-label" style="margin-top:0;">차단된 시간</div>
-      <div class="adm-item" style="border-left:3px solid var(--gold);"><div><div class="t">A룸 · 1/5 종일</div><div class="s">정비</div></div><button class="mini-btn" style="flex:0; padding:6px 12px;" onclick="toast('차단 해제')">해제</button></div>
-      <div class="adm-item" style="border-left:3px solid var(--gold);"><div><div class="t">전체 · 매주 월</div><div class="s">정기 휴무</div></div><button class="mini-btn" style="flex:0; padding:6px 12px;" onclick="toast('차단 해제')">해제</button></div>
-      <div class="adm-item" style="border-left:3px solid var(--gold);"><div><div class="t">B룸 · 매일 12~13시</div><div class="s">정비 시간</div></div><button class="mini-btn" style="flex:0; padding:6px 12px;" onclick="toast('차단 해제')">해제</button></div>
-      <div class="dashed-add" onclick="toast('차단 추가 (개발 예정)')">＋ 차단 추가</div>
+      <div class="step-sub" style="margin-bottom:10px;">연습실·날짜·시간을 정해 예약을 막습니다. 아래 타임라인을 드래그하거나 직접 입력하세요.</div>
+
+      <label class="form-label">연습실</label>
+      <select class="form-input" id="blkRoom" onchange="renderBlockGrid()"></select>
+
+      <label class="form-label">날짜</label>
+      <input class="form-input" id="blkDate" type="date" onchange="renderBlockGrid()">
+
+      <label class="form-label">시간 (드래그로 선택하거나 아래에서 입력)</label>
+      <div id="blockGrid" class="blk-grid"></div>
+
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <div style="flex:1;">
+          <label class="form-label" style="margin-top:0;">시작</label>
+          <input class="form-input" id="blkStart" type="time" value="12:00">
+        </div>
+        <div style="flex:1;">
+          <label class="form-label" style="margin-top:0;">종료</label>
+          <input class="form-input" id="blkEnd" type="time" value="13:00">
+        </div>
+      </div>
+      <label class="form-label">사유 (선택)</label>
+      <input class="form-input" id="blkReason" placeholder="예: 정비, 휴무">
+      <button class="cta cta-primary" style="margin-top:14px;" onclick="addBlock()">이 시간 차단하기</button>
+
+      <div class="sec-label" style="margin-top:22px;">차단된 시간</div>
+      <div id="blockList"></div>
     </div>
 
     <div id="adm-coaching" class="adm-pane" style="display:none;">
@@ -927,15 +1010,18 @@ function toggleRole(){
   state.viewMode = (state.viewMode==='admin') ? 'user' : 'admin';
   const btn=document.getElementById('roleBtn');
   const navAdmin=document.getElementById('navAdmin');
+  const app=document.getElementById('appView');
   if(state.viewMode==='admin'){
     btn.textContent='🛠️ 관리자 화면';
     navAdmin.style.display='flex';
     document.getElementById('topChip').textContent='관리자';
+    app.classList.add('admin-wide');
     go('admin');
   } else {
     btn.textContent='👤 이용자 화면';
     navAdmin.style.display='none';
     document.getElementById('topChip').textContent=(state.currentUser?state.currentUser.name:'회원')+'님';
+    app.classList.remove('admin-wide');
     go('home');
   }
 }
@@ -1196,24 +1282,34 @@ function pickRoom(id){ state.sel.room=id; state.sel.slots=[]; renderRooms(); loa
 
 // 선택한 날짜+연습실의 이미 예약된 슬롯을 Firebase에서 불러오고 슬롯 그리기
 let takenSlotsNow = [];
+let blockedSlotsNow = [];
 async function loadTakenAndRenderSlots(){
   takenSlotsNow = [];
+  blockedSlotsNow = [];
   const grid = document.getElementById('slotGrid');
   if(state.sel.room){
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">불러오는 중…</div>';
     try{
       const dateStr = selectedDateStr();
-      const q = window.RH.query(
-        window.RH.collection(window.RH.db, 'reservations')
-      );
-      const snap = await window.RH.getDocs(q);
+      // 예약된 슬롯
+      const snap = await window.RH.getDocs(window.RH.collection(window.RH.db, 'reservations'));
       snap.docs.forEach(d=>{
         const r=d.data();
         if(r.roomId===state.sel.room && r.date===dateStr && r.status==='confirmed'){
           (r.slots||[]).forEach(s=>takenSlotsNow.push(s));
         }
       });
-    }catch(e){ console.error('예약 조회 오류', e); }
+      // 차단된 슬롯
+      const room=rooms.find(r=>r.id===state.sel.room);
+      const slotList=buildSlots(room);
+      const bsnap = await window.RH.getDocs(window.RH.collection(window.RH.db, 'blocks'));
+      bsnap.docs.forEach(d=>{
+        const b=d.data();
+        if(b.roomId===state.sel.room && b.date===dateStr){
+          slotList.forEach(s=>{ if(s>=b.startTime && s<b.endTime) blockedSlotsNow.push(s); });
+        }
+      });
+    }catch(e){ console.error('예약/차단 조회 오류', e); }
   }
   renderSlots();
 }
@@ -1226,6 +1322,7 @@ function renderSlots(){
   const list = buildSlots(room);
   document.getElementById('slotGrid').innerHTML=list.map(t=>{
     if(takenSlotsNow.includes(t)) return `<div class="slot taken">${t}</div>`;
+    if(blockedSlotsNow.includes(t)) return `<div class="slot blocked">${t}<span class="tag">차단</span></div>`;
     const on=state.sel.slots.includes(t)?'on':'';
     return `<div class="slot ${on}" onclick="toggleSlot('${t}')">${t}</div>`;
   }).join('');
@@ -1383,6 +1480,152 @@ function admTab(name, el){
   if(name==='rooms') renderAdmRooms();
   if(name==='dash') renderAdmDash();
   if(name==='schedule') renderSchedule();
+  if(name==='block') initBlockTab();
+}
+
+/* ---------------- 예약 차단 (Firebase) ---------------- */
+let blocksCache = [];
+let blkSelected = new Set();  // 드래그로 선택된 슬롯
+
+async function initBlockTab(){
+  if(rooms.length===0) await loadRooms();
+  // 연습실 드롭다운 채우기
+  const sel=document.getElementById('blkRoom');
+  sel.innerHTML=rooms.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  // 날짜 기본값 오늘
+  const d=document.getElementById('blkDate');
+  if(!d.value) d.value=ymd(new Date());
+  await renderBlockGrid();
+  renderBlockList();
+}
+
+async function loadBlocks(){
+  const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'blocks'));
+  blocksCache=snap.docs.map(d=>({id:d.id, ...d.data()}));
+  return blocksCache;
+}
+
+async function renderBlockGrid(){
+  const grid=document.getElementById('blockGrid');
+  const roomId=document.getElementById('blkRoom').value;
+  const dateStr=document.getElementById('blkDate').value;
+  const room=rooms.find(r=>r.id===roomId);
+  if(!room || !dateStr){ grid.innerHTML=''; return; }
+  blkSelected.clear();
+  grid.innerHTML='<div class="empty" style="grid-column:1/-1;">불러오는 중…</div>';
+
+  await loadAllReservations();
+  await loadBlocks();
+  const slotList=buildSlots(room);
+  // 이미 예약된 슬롯
+  const bookedSet=new Set();
+  allReservationsCache.filter(r=>r.roomId===roomId && r.date===dateStr).forEach(r=>(r.slots||[]).forEach(s=>bookedSet.add(s)));
+  // 이미 차단된 슬롯
+  const blockedSet=new Set();
+  blocksCache.filter(b=>b.roomId===roomId && b.date===dateStr).forEach(b=>{
+    slotList.forEach(s=>{ if(s>=b.startTime && s<b.endTime) blockedSet.add(s); });
+  });
+
+  grid.innerHTML=slotList.map(t=>{
+    if(bookedSet.has(t)) return `<div class="blk-slot booked" data-t="${t}">${t}</div>`;
+    if(blockedSet.has(t)) return `<div class="blk-slot blocked" data-t="${t}">${t}</div>`;
+    return `<div class="blk-slot" data-t="${t}" data-idx="1">${t}</div>`;
+  }).join('');
+
+  attachBlockDrag(grid);
+}
+
+// 드래그 선택 (마우스 + 터치)
+function attachBlockDrag(grid){
+  let dragging=false;
+  const cells=grid.querySelectorAll('.blk-slot:not(.booked):not(.blocked)');
+  function selectCell(el){
+    if(!el || el.classList.contains('booked') || el.classList.contains('blocked')) return;
+    const t=el.dataset.t;
+    if(blkSelected.has(t)){ /* keep */ }
+    blkSelected.add(t);
+    el.classList.add('sel');
+    syncTimesFromSelection();
+  }
+  function fromPoint(x,y){
+    const el=document.elementFromPoint(x,y);
+    if(el && el.classList.contains('blk-slot')) return el;
+    return null;
+  }
+  cells.forEach(cell=>{
+    cell.addEventListener('mousedown',e=>{ dragging=true; blkSelected.clear(); grid.querySelectorAll('.sel').forEach(x=>x.classList.remove('sel')); selectCell(cell); e.preventDefault(); });
+    cell.addEventListener('mouseenter',()=>{ if(dragging) selectCell(cell); });
+    cell.addEventListener('click',()=>{ // 단일 탭 토글
+      const t=cell.dataset.t;
+      if(blkSelected.has(t)){ blkSelected.delete(t); cell.classList.remove('sel'); }
+      else { blkSelected.add(t); cell.classList.add('sel'); }
+      syncTimesFromSelection();
+    });
+  });
+  document.addEventListener('mouseup',()=>{ dragging=false; });
+  // 터치
+  grid.addEventListener('touchstart',e=>{ dragging=true; blkSelected.clear(); grid.querySelectorAll('.sel').forEach(x=>x.classList.remove('sel')); const el=fromPoint(e.touches[0].clientX,e.touches[0].clientY); selectCell(el); },{passive:true});
+  grid.addEventListener('touchmove',e=>{ if(!dragging)return; const el=fromPoint(e.touches[0].clientX,e.touches[0].clientY); selectCell(el); },{passive:true});
+  grid.addEventListener('touchend',()=>{ dragging=false; });
+}
+
+// 선택된 슬롯으로 시작/종료 입력칸 채우기
+function syncTimesFromSelection(){
+  if(blkSelected.size===0) return;
+  const arr=[...blkSelected].sort();
+  const first=arr[0];
+  const last=arr[arr.length-1];
+  const [lh,lm]=last.split(':').map(Number);
+  const endM=lh*60+lm+30;
+  const end=`${String(Math.floor(endM/60)).padStart(2,'0')}:${String(endM%60).padStart(2,'0')}`;
+  document.getElementById('blkStart').value=first;
+  document.getElementById('blkEnd').value=end;
+}
+
+async function addBlock(){
+  const roomId=document.getElementById('blkRoom').value;
+  const dateStr=document.getElementById('blkDate').value;
+  const start=document.getElementById('blkStart').value;
+  const end=document.getElementById('blkEnd').value;
+  const reason=document.getElementById('blkReason').value.trim();
+  const room=rooms.find(r=>r.id===roomId);
+  if(!roomId||!dateStr||!start||!end){ toast('연습실·날짜·시간을 확인해주세요'); return; }
+  if(start>=end){ toast('종료 시간이 시작보다 늦어야 해요'); return; }
+  try{
+    await window.RH.addDoc(window.RH.collection(window.RH.db,'blocks'),{
+      roomId, roomName:room.name, date:dateStr, startTime:start, endTime:end,
+      reason: reason||'차단', createdAt: window.RH.serverTimestamp()
+    });
+    toast('해당 시간이 차단되었어요');
+    document.getElementById('blkReason').value='';
+    blkSelected.clear();
+    await renderBlockGrid();
+    renderBlockList();
+  }catch(e){ console.error(e); toast('차단 저장에 실패했어요'); }
+}
+
+async function renderBlockList(){
+  const wrap=document.getElementById('blockList');
+  wrap.innerHTML='<div class="empty">불러오는 중…</div>';
+  await loadBlocks();
+  const sorted=[...blocksCache].sort((a,b)=>(a.date+a.startTime).localeCompare(b.date+b.startTime));
+  if(sorted.length===0){ wrap.innerHTML='<div class="empty">차단된 시간이 없어요.</div>'; return; }
+  wrap.innerHTML=sorted.map(b=>`
+    <div class="adm-item" style="border-left:3px solid var(--gold);">
+      <div><div class="t">${b.roomName} · ${fmtDateLabel(b.date)}</div>
+      <div class="s">${b.startTime}~${b.endTime} · ${b.reason}</div></div>
+      <button class="mini-btn" style="flex:0; padding:6px 12px;" onclick="removeBlock('${b.id}')">해제</button>
+    </div>`).join('');
+}
+
+async function removeBlock(id){
+  if(!confirm('이 차단을 해제할까요?')) return;
+  try{
+    await window.RH.deleteDoc(window.RH.doc(window.RH.db,'blocks',id));
+    toast('차단이 해제되었어요');
+    await renderBlockGrid();
+    renderBlockList();
+  }catch(e){ console.error(e); toast('해제에 실패했어요'); }
 }
 
 /* ---------------- 관리자 대시보드 (Firebase) ---------------- */
