@@ -333,6 +333,33 @@ input,select{font-family:inherit;}
 .blk-slot.sel{background:var(--gold); border-color:var(--gold); color:#1A1817; font-weight:500;}
 .blk-slot.booked{background:rgba(196,52,47,.15); border-color:rgba(196,52,47,.35); color:var(--red-soft); cursor:not-allowed;}
 .blk-slot.blocked{background:var(--charcoal-3); border-color:var(--line); color:var(--ivory-mute); cursor:not-allowed; text-decoration:line-through;}
+/* 예약 현황 뷰 전환 */
+.sched-viewtabs{display:flex; gap:6px; margin-bottom:12px;}
+.sched-viewtabs button{flex:1; padding:8px 0; border-radius:8px; border:1px solid var(--line); font-size:12px; color:var(--ivory-dim); background:var(--charcoal-2);}
+.sched-viewtabs button.on{background:var(--red); border-color:var(--red); color:#fff; font-weight:500;}
+/* 주간/다일 그리드 */
+.multi-timeline{display:flex; gap:6px; overflow-x:auto; padding-bottom:8px;}
+.mt-daycol{flex:1 0 auto; min-width:120px;}
+.mt-dayhead{text-align:center; font-size:12px; font-weight:500; padding:6px 0; border-bottom:1px solid var(--line); margin-bottom:4px;}
+.mt-dayhead.today{color:var(--red-soft);}
+.mt-events{display:flex; flex-direction:column; gap:4px;}
+.mt-event{border-radius:6px; padding:5px 7px; font-size:11px; color:#fff;}
+.mt-event.practice{background:linear-gradient(135deg,var(--red),var(--red-dark));}
+.mt-event.coaching{background:linear-gradient(135deg,var(--gold),#A8781F); color:#1A1817;}
+.mt-empty{font-size:11px; color:var(--ivory-mute); text-align:center; padding:12px 0;}
+/* 월간 달력 (작게, 정보 다 보이게) */
+.month-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:3px;}
+.mg-dow{text-align:center; font-size:11px; color:var(--ivory-mute); padding:4px 0;}
+.mg-cell{aspect-ratio:0.8; border:1px solid var(--line-soft); border-radius:7px; padding:4px; display:flex; flex-direction:column; gap:2px; overflow:hidden; min-height:56px;}
+.mg-cell.empty{visibility:hidden;}
+.mg-cell.today{border-color:var(--red-soft); background:rgba(196,52,47,.06);}
+.mg-date{font-size:11px; color:var(--ivory-dim); font-weight:500;}
+.mg-cell.today .mg-date{color:var(--red-soft);}
+.mg-count{font-size:10px; color:var(--gold-soft); background:rgba(217,164,65,.12); border-radius:4px; padding:1px 4px; align-self:flex-start;}
+.mg-bars{display:flex; flex-direction:column; gap:1px; margin-top:1px;}
+.mg-bar{height:3px; border-radius:2px;}
+.mg-bar.practice{background:var(--red-soft);}
+.mg-bar.coaching{background:var(--gold);}
 /* ============ 반응형: 패드 · 컴퓨터 (큰 화면) ============ */
 @media (min-width: 620px){
   /* 큰 화면에서 배경으로 앱을 감싸기 */
@@ -393,7 +420,7 @@ input,select{font-family:inherit;}
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, serverTimestamp,
@@ -416,7 +443,7 @@ input,select{font-family:inherit;}
   // 앱의 일반 스크립트에서 쓸 수 있도록 window에 노출
   window.RH = {
     auth, db,
-    GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+    GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
     doc, setDoc, getDoc, serverTimestamp,
     collection, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy
   };
@@ -424,6 +451,14 @@ input,select{font-family:inherit;}
   // 로그인 상태 변화 감지 → 앱에 알림
   onAuthStateChanged(auth, (user) => {
     if (window.onFirebaseAuthChanged) window.onFirebaseAuthChanged(user);
+  });
+
+  // 리다이렉트 로그인에서 돌아왔을 때 결과 확인 (오류 표시용)
+  getRedirectResult(auth).catch((e)=>{
+    console.error('redirect result error', e);
+    if(e && e.code === 'auth/unauthorized-domain'){
+      setTimeout(()=>{ if(window.toast) window.toast('이 주소는 아직 승인되지 않았어요 (설정 필요)'); }, 500);
+    }
   });
 </script>
 </head>
@@ -681,6 +716,12 @@ input,select{font-family:inherit;}
 
     <!-- 예약 현황: 연습실별 타임라인 -->
     <div id="adm-schedule" class="adm-pane" style="display:none;">
+      <div class="sched-viewtabs" id="schedViewTabs">
+        <button class="on" onclick="setSchedView('day',this)">1일</button>
+        <button onclick="setSchedView('2day',this)">2일</button>
+        <button onclick="setSchedView('week',this)">주간</button>
+        <button onclick="setSchedView('month',this)">월간</button>
+      </div>
       <div class="sched-head">
         <button class="cal-nav" onclick="schedMove(-1)">‹</button>
         <div class="sched-title" id="schedTitle">날짜</div>
@@ -908,21 +949,15 @@ const takenSlots = ['18:00'];
 const blockedSlots = { time:'21:00', label:'차단' };
 
 /* ---------------- Auth (Firebase) ---------------- */
-// 구글 로그인 버튼이 부르는 함수
+// 구글 로그인 버튼이 부르는 함수 (리다이렉트 방식: 사파리·아이폰·카톡 브라우저 모두 안정적)
 async function loginWithGoogle(){
   try{
     const provider = new window.RH.GoogleAuthProvider();
-    await window.RH.signInWithPopup(window.RH.auth, provider);
-    // 로그인 성공 후 처리는 onFirebaseAuthChanged가 담당
+    await window.RH.signInWithRedirect(window.RH.auth, provider);
+    // 페이지가 구글 로그인으로 넘어갔다가 돌아오면 getRedirectResult / onAuthStateChanged가 처리
   }catch(e){
     console.error(e);
-    if(e.code === 'auth/popup-closed-by-user'){
-      toast('로그인 창이 닫혔어요');
-    } else if(e.code === 'auth/unauthorized-domain'){
-      toast('이 주소는 아직 승인되지 않았어요 (설정 필요)');
-    } else {
-      toast('로그인에 실패했어요. 다시 시도해주세요');
-    }
+    toast('로그인을 시작하지 못했어요. 다시 시도해주세요');
   }
 }
 
@@ -1535,38 +1570,61 @@ async function renderBlockGrid(){
   attachBlockDrag(grid);
 }
 
-// 드래그 선택 (마우스 + 터치)
+// 드래그 선택 (시작 슬롯 ~ 현재 위치 사이 전체를 범위로 칠함)
+let blkSlotList = [];
 function attachBlockDrag(grid){
   let dragging=false;
-  const cells=grid.querySelectorAll('.blk-slot:not(.booked):not(.blocked)');
-  function selectCell(el){
-    if(!el || el.classList.contains('booked') || el.classList.contains('blocked')) return;
-    const t=el.dataset.t;
-    if(blkSelected.has(t)){ /* keep */ }
-    blkSelected.add(t);
-    el.classList.add('sel');
+  let anchorIdx=null;  // 드래그 시작 슬롯 인덱스
+  const cells=[...grid.querySelectorAll('.blk-slot')];
+  blkSlotList = cells.map(c=>c.dataset.t);
+
+  function idxOf(el){ return cells.indexOf(el); }
+  function isSelectable(el){ return el && el.classList.contains('blk-slot') && !el.classList.contains('booked') && !el.classList.contains('blocked'); }
+  function cellFromPoint(x,y){
+    const el=document.elementFromPoint(x,y);
+    return (el && el.classList.contains('blk-slot')) ? el : null;
+  }
+  // 시작~현재 인덱스 사이의 선택 가능한 슬롯을 모두 칠함
+  function paintRange(fromIdx, toIdx){
+    const lo=Math.min(fromIdx,toIdx), hi=Math.max(fromIdx,toIdx);
+    blkSelected.clear();
+    cells.forEach((c,i)=>{
+      c.classList.remove('sel');
+      if(i>=lo && i<=hi && isSelectable(c)){
+        c.classList.add('sel');
+        blkSelected.add(c.dataset.t);
+      }
+    });
     syncTimesFromSelection();
   }
-  function fromPoint(x,y){
-    const el=document.elementFromPoint(x,y);
-    if(el && el.classList.contains('blk-slot')) return el;
-    return null;
-  }
-  cells.forEach(cell=>{
-    cell.addEventListener('mousedown',e=>{ dragging=true; blkSelected.clear(); grid.querySelectorAll('.sel').forEach(x=>x.classList.remove('sel')); selectCell(cell); e.preventDefault(); });
-    cell.addEventListener('mouseenter',()=>{ if(dragging) selectCell(cell); });
-    cell.addEventListener('click',()=>{ // 단일 탭 토글
-      const t=cell.dataset.t;
-      if(blkSelected.has(t)){ blkSelected.delete(t); cell.classList.remove('sel'); }
-      else { blkSelected.add(t); cell.classList.add('sel'); }
-      syncTimesFromSelection();
+
+  cells.forEach((cell)=>{
+    // 마우스
+    cell.addEventListener('mousedown',e=>{
+      if(!isSelectable(cell)) return;
+      dragging=true; anchorIdx=idxOf(cell);
+      paintRange(anchorIdx, anchorIdx);
+      e.preventDefault();
+    });
+    cell.addEventListener('mouseenter',()=>{
+      if(dragging && anchorIdx!==null) paintRange(anchorIdx, idxOf(cell));
     });
   });
-  document.addEventListener('mouseup',()=>{ dragging=false; });
+  document.addEventListener('mouseup',()=>{ dragging=false; anchorIdx=null; });
+
   // 터치
-  grid.addEventListener('touchstart',e=>{ dragging=true; blkSelected.clear(); grid.querySelectorAll('.sel').forEach(x=>x.classList.remove('sel')); const el=fromPoint(e.touches[0].clientX,e.touches[0].clientY); selectCell(el); },{passive:true});
-  grid.addEventListener('touchmove',e=>{ if(!dragging)return; const el=fromPoint(e.touches[0].clientX,e.touches[0].clientY); selectCell(el); },{passive:true});
-  grid.addEventListener('touchend',()=>{ dragging=false; });
+  grid.addEventListener('touchstart',e=>{
+    const el=cellFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+    if(!isSelectable(el)) return;
+    dragging=true; anchorIdx=idxOf(el);
+    paintRange(anchorIdx, anchorIdx);
+  },{passive:true});
+  grid.addEventListener('touchmove',e=>{
+    if(!dragging || anchorIdx===null) return;
+    const el=cellFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+    if(el && el.classList.contains('blk-slot')) paintRange(anchorIdx, idxOf(el));
+  },{passive:true});
+  grid.addEventListener('touchend',()=>{ dragging=false; anchorIdx=null; });
 }
 
 // 선택된 슬롯으로 시작/종료 입력칸 채우기
@@ -1758,73 +1816,133 @@ function renderDayCalendar(cal, dayRes, minH, maxH, isToday){
 }
 function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 
-/* ---------------- 예약 현황 타임라인 ---------------- */
+/* ---------------- 예약 현황 (1일/2일/주간/월간) ---------------- */
 let schedDate = new Date();
-function schedMove(dir){ schedDate.setDate(schedDate.getDate()+dir); renderSchedule(); }
+let schedView = 'day';
+function setSchedView(v, el){
+  schedView=v;
+  document.querySelectorAll('#schedViewTabs button').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  renderSchedule();
+}
+function schedMove(dir){
+  if(schedView==='day') schedDate.setDate(schedDate.getDate()+dir);
+  else if(schedView==='2day') schedDate.setDate(schedDate.getDate()+dir*2);
+  else if(schedView==='week') schedDate.setDate(schedDate.getDate()+dir*7);
+  else if(schedView==='month') schedDate.setMonth(schedDate.getMonth()+dir);
+  renderSchedule();
+}
 function schedToday(){ schedDate = new Date(); renderSchedule(); }
+
 async function renderSchedule(){
   const wrap=document.getElementById('schedTimeline');
-  const dows=['일','월','화','수','목','금','토'];
-  document.getElementById('schedTitle').textContent=`${schedDate.getMonth()+1}월 ${schedDate.getDate()}일 (${dows[schedDate.getDay()]})`;
   wrap.innerHTML='<div class="tl-empty-msg">불러오는 중…</div>';
   try{
     if(rooms.length===0) await loadRooms();
     await loadAllReservations();
-    const dateStr=ymd(schedDate);
-    const activeRooms=rooms.filter(r=>r.active);
-    if(activeRooms.length===0){ wrap.innerHTML='<div class="tl-empty-msg">등록된 연습실이 없어요.</div>'; return; }
-
-    // 전체 운영시간 범위 계산 (모든 연습실 통합)
-    let minStart=24*60, maxEnd=0;
-    activeRooms.forEach(r=>{
-      const [oh,om]=r.open.split(':').map(Number); const [ch,cm]=r.close.split(':').map(Number);
-      minStart=Math.min(minStart,oh*60+om); maxEnd=Math.max(maxEnd,ch*60+cm);
-    });
-    // 시간 눈금 (30분 단위)
-    const times=[];
-    for(let t=minStart;t<maxEnd;t+=30) times.push(t);
-
-    const dayRes=allReservationsCache.filter(r=>r.date===dateStr);
-
-    // 시간 컬럼
-    let html='<div class="timeline">';
-    html+='<div class="tl-col tl-time-col"><div class="tl-head"></div>';
-    times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
-    html+='</div>';
-
-    // 연습실별 컬럼
-    activeRooms.forEach(room=>{
-      html+=`<div class="tl-col"><div class="tl-head">${room.name}</div>`;
-      times.forEach(()=>{ html+='<div class="tl-cell"></div>'; });
-      html+='</div>';
-    });
-    html+='</div>';
-    wrap.innerHTML=html;
-
-    // 예약 블록을 절대위치로 배치
-    const cols=wrap.querySelectorAll('.tl-col');
-    dayRes.forEach(r=>{
-      const roomIdx=activeRooms.findIndex(x=>x.id===r.roomId);
-      if(roomIdx<0) return;
-      const col=cols[roomIdx+1]; // +1은 시간 컬럼
-      const [sh,sm]=r.startTime.split(':').map(Number);
-      const [eh,em]=r.endTime.split(':').map(Number);
-      const startMin=sh*60+sm, endMin=eh*60+em;
-      const topRows=(startMin-minStart)/30;
-      const heightRows=(endMin-startMin)/30;
-      const block=document.createElement('div');
-      block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
-      block.style.top=(32 + topRows*26 + 2)+'px';  // 32=head, 26=slot height
-      block.style.height=(heightRows*26 - 4)+'px';
-      block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>${r.startTime}`;
-      col.style.position='relative';
-      col.appendChild(block);
-    });
-
-    if(dayRes.length===0){
-      wrap.insertAdjacentHTML('beforeend','<div style="text-align:center; color:var(--ivory-mute); font-size:12px; margin-top:12px;">이 날은 예약이 없어요</div>');
-    }
+    if(schedView==='day') renderSchedDay(wrap);
+    else if(schedView==='2day') renderSchedMulti(wrap, 2);
+    else if(schedView==='week') renderSchedMulti(wrap, 7);
+    else if(schedView==='month') renderSchedMonth(wrap);
   }catch(e){ console.error(e); wrap.innerHTML='<div class="tl-empty-msg">불러오지 못했어요.</div>'; }
+}
+
+// 1일 뷰: 연습실별 타임라인 (기존 방식)
+function renderSchedDay(wrap){
+  const dows=['일','월','화','수','목','금','토'];
+  document.getElementById('schedTitle').textContent=`${schedDate.getMonth()+1}월 ${schedDate.getDate()}일 (${dows[schedDate.getDay()]})`;
+  const dateStr=ymd(schedDate);
+  const activeRooms=rooms.filter(r=>r.active);
+  if(activeRooms.length===0){ wrap.innerHTML='<div class="tl-empty-msg">등록된 연습실이 없어요.</div>'; return; }
+  let minStart=24*60, maxEnd=0;
+  activeRooms.forEach(r=>{ const [oh,om]=r.open.split(':').map(Number); const [ch,cm]=r.close.split(':').map(Number); minStart=Math.min(minStart,oh*60+om); maxEnd=Math.max(maxEnd,ch*60+cm); });
+  const times=[]; for(let t=minStart;t<maxEnd;t+=30) times.push(t);
+  const dayRes=allReservationsCache.filter(r=>r.date===dateStr);
+  let html='<div class="timeline"><div class="tl-col tl-time-col"><div class="tl-head"></div>';
+  times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
+  html+='</div>';
+  activeRooms.forEach(room=>{ html+=`<div class="tl-col"><div class="tl-head">${room.name}</div>`; times.forEach(()=>{ html+='<div class="tl-cell"></div>'; }); html+='</div>'; });
+  html+='</div>';
+  wrap.innerHTML=html;
+  const cols=wrap.querySelectorAll('.tl-col');
+  dayRes.forEach(r=>{
+    const roomIdx=activeRooms.findIndex(x=>x.id===r.roomId);
+    if(roomIdx<0) return;
+    const col=cols[roomIdx+1];
+    const startMin=toMin(r.startTime), endMin=toMin(r.endTime);
+    const block=document.createElement('div');
+    block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
+    block.style.top=(32 + ((startMin-minStart)/30)*26 + 2)+'px';
+    block.style.height=(((endMin-startMin)/30)*26 - 4)+'px';
+    block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>${r.startTime}`;
+    col.style.position='relative'; col.appendChild(block);
+  });
+  if(dayRes.length===0) wrap.insertAdjacentHTML('beforeend','<div style="text-align:center; color:var(--ivory-mute); font-size:12px; margin-top:12px;">이 날은 예약이 없어요</div>');
+}
+
+// 다일 뷰 (2일/주간): 날짜별 컬럼에 예약 목록
+function renderSchedMulti(wrap, days){
+  const dows=['일','월','화','수','목','금','토'];
+  const start=new Date(schedDate);
+  if(days===7){ start.setDate(start.getDate()-start.getDay()); } // 주간은 일요일 시작
+  const end=new Date(start); end.setDate(start.getDate()+days-1);
+  document.getElementById('schedTitle').textContent=
+    `${start.getMonth()+1}/${start.getDate()} ~ ${end.getMonth()+1}/${end.getDate()}`;
+  const todayStr=ymd(new Date());
+  let html='<div class="multi-timeline">';
+  for(let i=0;i<days;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i);
+    const ds=ymd(d);
+    const dayRes=allReservationsCache.filter(r=>r.date===ds).sort((a,b)=>a.startTime.localeCompare(b.startTime));
+    html+=`<div class="mt-daycol">
+      <div class="mt-dayhead ${ds===todayStr?'today':''}">${d.getMonth()+1}/${d.getDate()} (${dows[d.getDay()]})</div>
+      <div class="mt-events">`;
+    if(dayRes.length===0) html+='<div class="mt-empty">–</div>';
+    else dayRes.forEach(r=>{
+      html+=`<div class="mt-event ${r.type==='coaching'?'coaching':'practice'}">${r.startTime} ${r.roomName}<br><span style="opacity:.85;">${r.userName||''}</span></div>`;
+    });
+    html+='</div></div>';
+  }
+  html+='</div>';
+  wrap.innerHTML=html;
+}
+
+// 월간 뷰: 작은 달력에 예약 수와 막대
+function renderSchedMonth(wrap){
+  const y=schedDate.getFullYear(), m=schedDate.getMonth();
+  document.getElementById('schedTitle').textContent=`${y}년 ${m+1}월`;
+  const first=new Date(y,m,1).getDay();
+  const days=new Date(y,m+1,0).getDate();
+  const todayStr=ymd(new Date());
+  // 날짜별 예약 집계
+  const byDate={};
+  allReservationsCache.forEach(r=>{
+    const d=new Date(r.date+'T00:00:00');
+    if(d.getFullYear()===y && d.getMonth()===m){
+      (byDate[r.date]=byDate[r.date]||{practice:0,coaching:0})[r.type==='coaching'?'coaching':'practice']++;
+    }
+  });
+  const dows=['일','월','화','수','목','금','토'];
+  let html='<div class="month-grid">';
+  dows.forEach(d=>html+=`<div class="mg-dow">${d}</div>`);
+  for(let i=0;i<first;i++) html+='<div class="mg-cell empty"></div>';
+  for(let dd=1;dd<=days;dd++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    const c=byDate[ds];
+    const total=c?(c.practice+c.coaching):0;
+    let bars='';
+    if(c){
+      for(let i=0;i<Math.min(c.practice,3);i++) bars+='<div class="mg-bar practice"></div>';
+      for(let i=0;i<Math.min(c.coaching,3);i++) bars+='<div class="mg-bar coaching"></div>';
+    }
+    html+=`<div class="mg-cell ${ds===todayStr?'today':''}">
+      <div class="mg-date">${dd}</div>
+      ${total?`<div class="mg-count">${total}건</div>`:''}
+      <div class="mg-bars">${bars}</div>
+    </div>`;
+  }
+  html+='</div>';
+  wrap.innerHTML=html;
 }
 
 /* ---------------- 연습실 (Firebase 연동) ---------------- */
