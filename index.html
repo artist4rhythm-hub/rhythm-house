@@ -313,6 +313,20 @@ input,select{font-family:inherit;}
 .tl-book.coaching{background:linear-gradient(135deg, var(--gold), #A8781F); color:#1A1817;}
 .tl-book .bk-name{font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .tl-empty-msg{text-align:center; color:var(--ivory-mute); font-size:13px; padding:30px; border:1px dashed var(--line); border-radius:12px;}
+/* 데이 캘린더 (애플 캘린더 느낌) */
+.daycal{position:relative; background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:12px; padding:8px 8px 8px 0; overflow:hidden;}
+.daycal-row{display:flex; height:44px; position:relative;}
+.daycal-time{flex:0 0 52px; text-align:right; padding-right:10px; font-size:11px; color:var(--ivory-mute); transform:translateY(-7px);}
+.daycal-line{flex:1; border-top:1px solid var(--line-soft); position:relative;}
+.daycal-track{position:absolute; left:52px; right:8px; top:8px; bottom:8px;}
+.daycal-event{position:absolute; border-radius:7px; padding:4px 8px; font-size:11px; color:#fff; overflow:hidden; z-index:3; box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.daycal-event.practice{background:linear-gradient(135deg, var(--red), var(--red-dark));}
+.daycal-event.coaching{background:linear-gradient(135deg, var(--gold), #A8781F); color:#1A1817;}
+.daycal-event .ev-title{font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.daycal-event .ev-sub{opacity:.85; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.daycal-now{position:absolute; left:44px; right:0; height:2px; background:var(--red-soft); z-index:5; pointer-events:none;}
+.daycal-now::before{content:""; position:absolute; left:0; top:-4px; width:9px; height:9px; border-radius:50%; background:var(--red-soft);}
+.daycal-now-label{position:absolute; left:2px; transform:translateY(-50%); font-size:9px; color:#fff; background:var(--red-soft); border-radius:4px; padding:1px 4px; z-index:6;}
 </style>
 <!-- Firebase SDK -->
 <script type="module">
@@ -589,7 +603,18 @@ input,select{font-family:inherit;}
         <div class="adm-stat"><div class="n">–</div><div class="l">이번 주</div></div>
         <div class="adm-stat"><div class="n">–</div><div class="l">연습실</div></div>
       </div>
-      <div class="sec-label" style="margin-top:8px;">오늘 예약</div>
+
+      <div class="sched-head" style="margin-top:6px;">
+        <button class="cal-nav" onclick="dashMove(-1)">‹</button>
+        <div class="sched-title" id="dashDateTitle">오늘</div>
+        <button class="cal-nav" onclick="dashMove(1)">›</button>
+      </div>
+      <div class="sched-today-btn" onclick="dashToday()">오늘로</div>
+
+      <!-- 캘린더 타임테이블 (구글/애플 캘린더 느낌) -->
+      <div id="dashCalendar" class="daycal"></div>
+
+      <div class="sec-label" style="margin-top:20px;">예약 목록</div>
       <div id="admTodayList"></div>
     </div>
 
@@ -1369,36 +1394,126 @@ async function loadAllReservations(){
 }
 function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
+let dashDate = new Date();
+let dashNowTimer = null;
+function dashMove(dir){ dashDate.setDate(dashDate.getDate()+dir); renderAdmDash(); }
+function dashToday(){ dashDate = new Date(); renderAdmDash(); }
+
 async function renderAdmDash(){
   const statRow=document.getElementById('admStatRow');
   const todayList=document.getElementById('admTodayList');
+  const cal=document.getElementById('dashCalendar');
+  if(!cal) return;
   todayList.innerHTML='<div class="empty">불러오는 중…</div>';
+  cal.innerHTML='';
   try{
     await loadAllReservations();
     if(rooms.length===0) await loadRooms();
+
+    // 상단 통계는 항상 오늘 기준
     const todayStr=ymd(new Date());
-    // 이번 주 범위 (일~토)
     const now=new Date(); const dow=now.getDay();
     const weekStart=new Date(now); weekStart.setDate(now.getDate()-dow); weekStart.setHours(0,0,0,0);
     const weekEnd=new Date(weekStart); weekEnd.setDate(weekStart.getDate()+7);
-
-    const todays=allReservationsCache.filter(r=>r.date===todayStr).sort((a,b)=>a.startTime.localeCompare(b.startTime));
-    const weeks=allReservationsCache.filter(r=>{ const d=new Date(r.date+'T00:00:00'); return d>=weekStart && d<weekEnd; });
-
+    const todayCount=allReservationsCache.filter(r=>r.date===todayStr).length;
+    const weekCount=allReservationsCache.filter(r=>{ const d=new Date(r.date+'T00:00:00'); return d>=weekStart && d<weekEnd; }).length;
     statRow.innerHTML=`
-      <div class="adm-stat"><div class="n">${todays.length}</div><div class="l">오늘 예약</div></div>
-      <div class="adm-stat"><div class="n">${weeks.length}</div><div class="l">이번 주</div></div>
+      <div class="adm-stat"><div class="n">${todayCount}</div><div class="l">오늘 예약</div></div>
+      <div class="adm-stat"><div class="n">${weekCount}</div><div class="l">이번 주</div></div>
       <div class="adm-stat"><div class="n">${rooms.length}</div><div class="l">연습실</div></div>`;
 
-    if(todays.length===0){ todayList.innerHTML='<div class="empty">오늘 예약이 없어요.</div>'; return; }
-    todayList.innerHTML=todays.map(r=>`
-      <div class="adm-item">
-        <div><div class="t">${r.startTime}~${r.endTime} · ${r.userName||'회원'}</div>
-        <div class="s">${r.roomName} · ${r.type==='coaching'?'코칭':'연습'}</div></div>
-        <span class="badge ${r.type==='coaching'?'b-wait':'b-confirm'}">${r.type==='coaching'?'코칭':'확정'}</span>
-      </div>`).join('');
+    // 선택 날짜
+    const dows=['일','월','화','수','목','금','토'];
+    const isToday = ymd(dashDate)===todayStr;
+    document.getElementById('dashDateTitle').textContent =
+      (isToday?'오늘 · ':'') + `${dashDate.getMonth()+1}월 ${dashDate.getDate()}일 (${dows[dashDate.getDay()]})`;
+
+    const dateStr=ymd(dashDate);
+    const dayRes=allReservationsCache.filter(r=>r.date===dateStr)
+      .sort((a,b)=>a.startTime.localeCompare(b.startTime));
+
+    // 캘린더 시간 범위 (연습실 운영시간 통합, 없으면 09~22)
+    const activeRooms=rooms.filter(r=>r.active);
+    let minH=9, maxH=22;
+    if(activeRooms.length){
+      let mn=24*60, mx=0;
+      activeRooms.forEach(r=>{ const [oh,om]=r.open.split(':').map(Number); const [ch,cm]=r.close.split(':').map(Number); mn=Math.min(mn,oh*60+om); mx=Math.max(mx,ch*60+cm); });
+      minH=Math.floor(mn/60); maxH=Math.ceil(mx/60);
+    }
+    renderDayCalendar(cal, dayRes, minH, maxH, isToday);
+
+    // 예약 카드 목록
+    if(dayRes.length===0){ todayList.innerHTML='<div class="empty">이 날은 예약이 없어요.</div>'; }
+    else{
+      todayList.innerHTML=dayRes.map(r=>`
+        <div class="adm-item">
+          <div><div class="t">${r.startTime}~${r.endTime} · ${r.userName||'회원'}</div>
+          <div class="s">${r.roomName} · ${r.type==='coaching'?'코칭':'연습'}</div></div>
+          <span class="badge ${r.type==='coaching'?'b-wait':'b-confirm'}">${r.type==='coaching'?'코칭':'확정'}</span>
+        </div>`).join('');
+    }
   }catch(e){ console.error(e); todayList.innerHTML='<div class="empty">불러오지 못했어요.</div>'; }
 }
+
+// 하루 캘린더 그리기 (시간 눈금 + 예약 블록 + 현재시각 선)
+const HOUR_PX = 44;
+function renderDayCalendar(cal, dayRes, minH, maxH, isToday){
+  let html='';
+  for(let hh=minH; hh<maxH; hh++){
+    html+=`<div class="daycal-row"><div class="daycal-time">${String(hh).padStart(2,'0')}:00</div><div class="daycal-line"></div></div>`;
+  }
+  html+='<div class="daycal-track" id="dashTrack"></div>';
+  cal.innerHTML=html;
+
+  const track=cal.querySelector('#dashTrack');
+  // 같은 시간대 겹침 처리: 간단히 나란히 배치
+  const lanes=[]; // 각 예약의 겹침 레인 계산
+  dayRes.forEach(r=>{
+    const s=toMin(r.startTime), e=toMin(r.endTime);
+    let lane=0;
+    while(lanes[lane] && lanes[lane] > s) lane++;
+    lanes[lane]=e;
+    r._lane=lane;
+  });
+  const laneCount=Math.max(1, lanes.length);
+
+  dayRes.forEach(r=>{
+    const s=toMin(r.startTime), e=toMin(r.endTime);
+    const top=((s - minH*60)/60)*HOUR_PX;
+    const height=((e-s)/60)*HOUR_PX - 3;
+    const widthPct=100/laneCount;
+    const ev=document.createElement('div');
+    ev.className='daycal-event '+(r.type==='coaching'?'coaching':'practice');
+    ev.style.top=top+'px';
+    ev.style.height=Math.max(height,20)+'px';
+    ev.style.left=(r._lane*widthPct)+'%';
+    ev.style.width='calc('+widthPct+'% - 4px)';
+    ev.innerHTML=`<div class="ev-title">${r.roomName}</div><div class="ev-sub">${r.startTime} ${r.userName||''}</div>`;
+    track.appendChild(ev);
+  });
+
+  // 현재 시각 선 (오늘일 때만)
+  if(dashNowTimer){ clearInterval(dashNowTimer); dashNowTimer=null; }
+  function drawNow(){
+    const old=cal.querySelector('.daycal-now'); if(old) old.remove();
+    const oldL=cal.querySelector('.daycal-now-label'); if(oldL) oldL.remove();
+    if(!isToday) return;
+    const now=new Date();
+    const nowMin=now.getHours()*60+now.getMinutes();
+    if(nowMin < minH*60 || nowMin > maxH*60) return;
+    const top=8 + ((nowMin - minH*60)/60)*HOUR_PX;
+    const line=document.createElement('div');
+    line.className='daycal-now'; line.style.top=top+'px';
+    cal.appendChild(line);
+    const label=document.createElement('div');
+    label.className='daycal-now-label'; label.style.top=top+'px';
+    label.textContent=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    cal.appendChild(label);
+  }
+  drawNow();
+  if(isToday) dashNowTimer=setInterval(drawNow, 60000); // 1분마다 갱신
+}
+function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 
 /* ---------------- 예약 현황 타임라인 ---------------- */
 let schedDate = new Date();
