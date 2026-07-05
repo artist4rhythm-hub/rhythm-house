@@ -297,6 +297,22 @@ input,select{font-family:inherit;}
 .form-input:focus{outline:none; border-color:var(--gold);}
 .form-check{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ivory-dim); margin-top:14px; cursor:pointer;}
 .form-check input{width:18px; height:18px; accent-color:var(--red);}
+/* 예약 현황 타임라인 */
+.sched-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+.sched-title{font-size:15px; font-weight:500;}
+.sched-today-btn{display:inline-block; font-size:11px; color:var(--gold); border:1px solid var(--line); border-radius:20px; padding:4px 12px; margin-bottom:14px; cursor:pointer;}
+.timeline{display:flex; gap:6px; overflow-x:auto; padding-bottom:8px;}
+.tl-col{flex:0 0 auto; min-width:96px;}
+.tl-time-col{flex:0 0 auto; min-width:44px;}
+.tl-head{height:32px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500; color:var(--ivory); border-bottom:1px solid var(--line); position:sticky; top:0;}
+.tl-time-col .tl-head{color:transparent;}
+.tl-slot{height:26px; border-bottom:1px solid var(--line-soft); display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--ivory-mute); position:relative;}
+.tl-cell{height:26px; border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft); position:relative;}
+.tl-book{position:absolute; left:2px; right:2px; border-radius:5px; padding:2px 5px; font-size:10px; overflow:hidden; color:#fff; line-height:1.2; z-index:2;}
+.tl-book.practice{background:linear-gradient(135deg, var(--red), var(--red-dark));}
+.tl-book.coaching{background:linear-gradient(135deg, var(--gold), #A8781F); color:#1A1817;}
+.tl-book .bk-name{font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tl-empty-msg{text-align:center; color:var(--ivory-mute); font-size:13px; padding:30px; border:1px dashed var(--line); border-radius:12px;}
 </style>
 <!-- Firebase SDK -->
 <script type="module">
@@ -558,6 +574,7 @@ input,select{font-family:inherit;}
     <div class="step-title" style="margin-bottom:16px;">관리자</div>
     <div class="tabbar" id="admTabs">
       <button class="on" onclick="admTab('dash',this)">대시보드</button>
+      <button onclick="admTab('schedule',this)">예약 현황</button>
       <button onclick="admTab('rooms',this)">연습실</button>
       <button onclick="admTab('block',this)">예약 차단</button>
       <button onclick="admTab('coaching',this)">코칭 시간</button>
@@ -567,15 +584,24 @@ input,select{font-family:inherit;}
     </div>
 
     <div id="adm-dash" class="adm-pane">
-      <div class="adm-stat-row">
-        <div class="adm-stat"><div class="n">12</div><div class="l">오늘 예약</div></div>
-        <div class="adm-stat"><div class="n">3</div><div class="l">대기</div></div>
-        <div class="adm-stat"><div class="n">28</div><div class="l">활성 회원</div></div>
+      <div class="adm-stat-row" id="admStatRow">
+        <div class="adm-stat"><div class="n">–</div><div class="l">오늘 예약</div></div>
+        <div class="adm-stat"><div class="n">–</div><div class="l">이번 주</div></div>
+        <div class="adm-stat"><div class="n">–</div><div class="l">연습실</div></div>
       </div>
-      <div class="sec-label" style="margin-top:8px;">오늘 예약 현황</div>
-      <div class="adm-item"><div><div class="t">09:00 · 김OO</div><div class="s">A룸 · 연습 1시간</div></div><span class="badge b-confirm">확정</span></div>
-      <div class="adm-item"><div><div class="t">10:30 · 이OO</div><div class="s">B룸 · 코칭 30분</div></div><span class="badge b-confirm">확정</span></div>
-      <div class="adm-item"><div><div class="t">19:00 · 현우</div><div class="s">A룸 · 연습 1시간</div></div><span class="badge b-confirm">확정</span></div>
+      <div class="sec-label" style="margin-top:8px;">오늘 예약</div>
+      <div id="admTodayList"></div>
+    </div>
+
+    <!-- 예약 현황: 연습실별 타임라인 -->
+    <div id="adm-schedule" class="adm-pane" style="display:none;">
+      <div class="sched-head">
+        <button class="cal-nav" onclick="schedMove(-1)">‹</button>
+        <div class="sched-title" id="schedTitle">날짜</div>
+        <button class="cal-nav" onclick="schedMove(1)">›</button>
+      </div>
+      <div class="sched-today-btn" onclick="schedToday()">오늘로</div>
+      <div id="schedTimeline"></div>
     </div>
 
     <div id="adm-rooms" class="adm-pane" style="display:none;">
@@ -898,6 +924,7 @@ function go(screen){
   if(screen==='mine') renderMine();
   if(screen==='stats') renderHistory();
   if(screen==='pay') renderPlans();
+  if(screen==='admin') renderAdmDash();
   window.scrollTo(0,0);
 }
 
@@ -1329,6 +1356,117 @@ function admTab(name, el){
   if(name==='coaching') renderAdmCoach();
   if(name==='plans') renderAdmPlans();
   if(name==='rooms') renderAdmRooms();
+  if(name==='dash') renderAdmDash();
+  if(name==='schedule') renderSchedule();
+}
+
+/* ---------------- 관리자 대시보드 (Firebase) ---------------- */
+let allReservationsCache = [];
+async function loadAllReservations(){
+  const snap = await window.RH.getDocs(window.RH.collection(window.RH.db, 'reservations'));
+  allReservationsCache = snap.docs.map(d=>({id:d.id, ...d.data()})).filter(r=>r.status==='confirmed');
+  return allReservationsCache;
+}
+function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+async function renderAdmDash(){
+  const statRow=document.getElementById('admStatRow');
+  const todayList=document.getElementById('admTodayList');
+  todayList.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    await loadAllReservations();
+    if(rooms.length===0) await loadRooms();
+    const todayStr=ymd(new Date());
+    // 이번 주 범위 (일~토)
+    const now=new Date(); const dow=now.getDay();
+    const weekStart=new Date(now); weekStart.setDate(now.getDate()-dow); weekStart.setHours(0,0,0,0);
+    const weekEnd=new Date(weekStart); weekEnd.setDate(weekStart.getDate()+7);
+
+    const todays=allReservationsCache.filter(r=>r.date===todayStr).sort((a,b)=>a.startTime.localeCompare(b.startTime));
+    const weeks=allReservationsCache.filter(r=>{ const d=new Date(r.date+'T00:00:00'); return d>=weekStart && d<weekEnd; });
+
+    statRow.innerHTML=`
+      <div class="adm-stat"><div class="n">${todays.length}</div><div class="l">오늘 예약</div></div>
+      <div class="adm-stat"><div class="n">${weeks.length}</div><div class="l">이번 주</div></div>
+      <div class="adm-stat"><div class="n">${rooms.length}</div><div class="l">연습실</div></div>`;
+
+    if(todays.length===0){ todayList.innerHTML='<div class="empty">오늘 예약이 없어요.</div>'; return; }
+    todayList.innerHTML=todays.map(r=>`
+      <div class="adm-item">
+        <div><div class="t">${r.startTime}~${r.endTime} · ${r.userName||'회원'}</div>
+        <div class="s">${r.roomName} · ${r.type==='coaching'?'코칭':'연습'}</div></div>
+        <span class="badge ${r.type==='coaching'?'b-wait':'b-confirm'}">${r.type==='coaching'?'코칭':'확정'}</span>
+      </div>`).join('');
+  }catch(e){ console.error(e); todayList.innerHTML='<div class="empty">불러오지 못했어요.</div>'; }
+}
+
+/* ---------------- 예약 현황 타임라인 ---------------- */
+let schedDate = new Date();
+function schedMove(dir){ schedDate.setDate(schedDate.getDate()+dir); renderSchedule(); }
+function schedToday(){ schedDate = new Date(); renderSchedule(); }
+async function renderSchedule(){
+  const wrap=document.getElementById('schedTimeline');
+  const dows=['일','월','화','수','목','금','토'];
+  document.getElementById('schedTitle').textContent=`${schedDate.getMonth()+1}월 ${schedDate.getDate()}일 (${dows[schedDate.getDay()]})`;
+  wrap.innerHTML='<div class="tl-empty-msg">불러오는 중…</div>';
+  try{
+    if(rooms.length===0) await loadRooms();
+    await loadAllReservations();
+    const dateStr=ymd(schedDate);
+    const activeRooms=rooms.filter(r=>r.active);
+    if(activeRooms.length===0){ wrap.innerHTML='<div class="tl-empty-msg">등록된 연습실이 없어요.</div>'; return; }
+
+    // 전체 운영시간 범위 계산 (모든 연습실 통합)
+    let minStart=24*60, maxEnd=0;
+    activeRooms.forEach(r=>{
+      const [oh,om]=r.open.split(':').map(Number); const [ch,cm]=r.close.split(':').map(Number);
+      minStart=Math.min(minStart,oh*60+om); maxEnd=Math.max(maxEnd,ch*60+cm);
+    });
+    // 시간 눈금 (30분 단위)
+    const times=[];
+    for(let t=minStart;t<maxEnd;t+=30) times.push(t);
+
+    const dayRes=allReservationsCache.filter(r=>r.date===dateStr);
+
+    // 시간 컬럼
+    let html='<div class="timeline">';
+    html+='<div class="tl-col tl-time-col"><div class="tl-head"></div>';
+    times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
+    html+='</div>';
+
+    // 연습실별 컬럼
+    activeRooms.forEach(room=>{
+      html+=`<div class="tl-col"><div class="tl-head">${room.name}</div>`;
+      times.forEach(()=>{ html+='<div class="tl-cell"></div>'; });
+      html+='</div>';
+    });
+    html+='</div>';
+    wrap.innerHTML=html;
+
+    // 예약 블록을 절대위치로 배치
+    const cols=wrap.querySelectorAll('.tl-col');
+    dayRes.forEach(r=>{
+      const roomIdx=activeRooms.findIndex(x=>x.id===r.roomId);
+      if(roomIdx<0) return;
+      const col=cols[roomIdx+1]; // +1은 시간 컬럼
+      const [sh,sm]=r.startTime.split(':').map(Number);
+      const [eh,em]=r.endTime.split(':').map(Number);
+      const startMin=sh*60+sm, endMin=eh*60+em;
+      const topRows=(startMin-minStart)/30;
+      const heightRows=(endMin-startMin)/30;
+      const block=document.createElement('div');
+      block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
+      block.style.top=(32 + topRows*26 + 2)+'px';  // 32=head, 26=slot height
+      block.style.height=(heightRows*26 - 4)+'px';
+      block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>${r.startTime}`;
+      col.style.position='relative';
+      col.appendChild(block);
+    });
+
+    if(dayRes.length===0){
+      wrap.insertAdjacentHTML('beforeend','<div style="text-align:center; color:var(--ivory-mute); font-size:12px; margin-top:12px;">이 날은 예약이 없어요</div>');
+    }
+  }catch(e){ console.error(e); wrap.innerHTML='<div class="tl-empty-msg">불러오지 못했어요.</div>'; }
 }
 
 /* ---------------- 연습실 (Firebase 연동) ---------------- */
