@@ -44,6 +44,27 @@
   .legend .sw{width:14px; height:14px; border-radius:4px;}
   .sw.practice{background:linear-gradient(135deg,var(--red),var(--red-dark));}
   .sw.coaching{background:linear-gradient(135deg,var(--gold),#A8781F);}
+  .board-tabs{display:flex; gap:6px; margin-left:auto;}
+  .board-tabs button{
+    padding:7px 16px; border-radius:8px; border:1px solid var(--line);
+    background:var(--charcoal-3); color:var(--ivory-dim); font-size:14px; cursor:pointer;
+  }
+  .board-tabs button.on{background:var(--red); border-color:var(--red); color:#fff; font-weight:600;}
+  /* 주간 뷰 */
+  .week-wrap{display:flex; gap:8px; min-width:max-content;}
+  .wk-daycol{flex:0 0 auto; min-width:150px;}
+  .wk-dayhead{
+    text-align:center; font-size:16px; font-weight:700; padding:10px 0;
+    border-bottom:2px solid var(--line); margin-bottom:8px;
+  }
+  .wk-dayhead.today{color:var(--red-soft);}
+  .wk-events{display:flex; flex-direction:column; gap:6px;}
+  .wk-event{border-radius:8px; padding:8px 10px; color:#fff;}
+  .wk-event.practice{background:linear-gradient(135deg,var(--red),var(--red-dark));}
+  .wk-event.coaching{background:linear-gradient(135deg,var(--gold),#A8781F); color:#1A1817;}
+  .wk-event .we-name{font-size:14px; font-weight:700;}
+  .wk-event .we-info{font-size:12px; opacity:.9; margin-top:1px;}
+  .wk-empty{font-size:12px; color:var(--ivory-mute); text-align:center; padding:14px 0;}
 
   .board{position:relative; background:var(--charcoal-2s); border:1px solid var(--line); border-radius:16px; padding:16px; overflow-x:auto;}
   .timeline{display:flex; gap:10px; position:relative; min-width:max-content;}
@@ -96,6 +117,11 @@
   <div class="legend">
     <span><span class="sw practice"></span> 연습</span>
     <span><span class="sw coaching"></span> 코칭</span>
+    <div class="board-tabs" id="boardTabs">
+      <button class="on" onclick="setBoardView('today',this)">오늘</button>
+      <button onclick="setBoardView('tomorrow',this)">내일</button>
+      <button onclick="setBoardView('week',this)">이번 주</button>
+    </div>
   </div>
   <div class="board" id="board">
     <div class="empty-board">불러오는 중…</div>
@@ -124,79 +150,123 @@
   function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 
   let nowTimer=null;
+  let boardView='today';
+  window.setBoardView=function(v, el){
+    boardView=v;
+    document.querySelectorAll('#boardTabs button').forEach(b=>b.classList.remove('on'));
+    el.classList.add('on');
+    loadBoard();
+  };
+
+  // 연습실·예약 데이터를 한 번에 불러오기
+  async function fetchData(){
+    const roomSnap=await getDocs(collection(db,'rooms'));
+    let rooms=roomSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(r=>r.active!==false);
+    rooms.sort((a,b)=>{
+      const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
+      const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
+      return ta-tb;
+    });
+    const resSnap=await getDocs(collection(db,'reservations'));
+    const res=resSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(r=>r.status==='confirmed');
+    return {rooms, res};
+  }
 
   async function loadBoard(){
     const board=document.getElementById('board');
     const dows=['일','월','화','수','목','금','토'];
-    const today=new Date();
-    document.getElementById('boardDate').textContent=`${today.getMonth()+1}월 ${today.getDate()}일 (${dows[today.getDay()]})`;
-    const dateStr=ymd(today);
+    board.innerHTML='<div class="empty-board">불러오는 중…</div>';
+    if(nowTimer){ clearInterval(nowTimer); nowTimer=null; }
 
     try{
-      // 연습실
-      const roomSnap=await getDocs(collection(db,'rooms'));
-      let rooms=roomSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(r=>r.active!==false);
-      // createdAt 순 정렬
-      rooms.sort((a,b)=>{
-        const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
-        const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
-        return ta-tb;
-      });
+      const {rooms, res}=await fetchData();
       if(rooms.length===0){ board.innerHTML='<div class="empty-board">등록된 연습실이 없습니다.</div>'; return; }
 
-      // 예약
-      const resSnap=await getDocs(collection(db,'reservations'));
-      const dayRes=resSnap.docs.map(d=>({id:d.id, ...d.data()}))
-        .filter(r=>r.date===dateStr && r.status==='confirmed');
-
-      // 운영시간 범위
-      let minStart=24*60, maxEnd=0;
-      rooms.forEach(r=>{
-        const [oh,om]=(r.open||'09:00').split(':').map(Number);
-        const [ch,cm]=(r.close||'22:00').split(':').map(Number);
-        minStart=Math.min(minStart,oh*60+om); maxEnd=Math.max(maxEnd,ch*60+cm);
-      });
-      const times=[]; for(let t=minStart;t<maxEnd;t+=30) times.push(t);
-
-      // 그리드
-      let html='<div class="timeline">';
-      html+='<div class="tl-col tl-time-col"><div class="tl-head"></div>';
-      times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
-      html+='</div>';
-      rooms.forEach(room=>{
-        html+=`<div class="tl-col tl-room-col" data-room="${room.id}"><div class="tl-head">${room.name}</div>`;
-        times.forEach(()=>{ html+='<div class="tl-cell"></div>'; });
-        html+='</div>';
-      });
-      html+='</div>';
-      board.innerHTML=html;
-
-      // 예약 블록 배치
-      const cols=board.querySelectorAll('.tl-room-col');
-      dayRes.forEach(r=>{
-        const col=[...cols].find(c=>c.dataset.room===r.roomId);
-        if(!col) return;
-        const s=toMin(r.startTime), e=toMin(r.endTime);
-        const block=document.createElement('div');
-        block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
-        block.style.top=(HEAD_PX + ((s-minStart)/30)*SLOT_PX + 3)+'px';
-        block.style.height=(((e-s)/30)*SLOT_PX - 6)+'px';
-        block.innerHTML=`<div class="bk-name">${r.userName||'예약'}</div><div class="bk-time">${r.startTime}~${r.endTime}${r.type==='coaching'?' · 코칭':''}</div>`;
-        col.appendChild(block);
-      });
-
-      // 현재 시각 선
-      drawNowLine(board, minStart, maxEnd, times.length);
-      if(nowTimer) clearInterval(nowTimer);
-      nowTimer=setInterval(()=>drawNowLine(board, minStart, maxEnd, times.length), 30000);
-
+      if(boardView==='week'){
+        renderWeek(board, rooms, res, dows);
+      } else {
+        // 오늘 또는 내일
+        const d=new Date();
+        if(boardView==='tomorrow') d.setDate(d.getDate()+1);
+        document.getElementById('boardDate').textContent=`${d.getMonth()+1}월 ${d.getDate()}일 (${dows[d.getDay()]})`;
+        renderDay(board, rooms, res, ymd(d), boardView==='today');
+      }
     }catch(e){
       console.error(e);
       board.innerHTML='<div class="empty-board">현황을 불러오지 못했습니다. 잠시 후 다시 시도합니다.</div>';
     }
   }
 
-  function drawNowLine(board, minStart, maxEnd, slotCount){
+  // 하루 타임라인
+  function renderDay(board, rooms, allRes, dateStr, isToday){
+    const dayRes=allRes.filter(r=>r.date===dateStr);
+    let minStart=24*60, maxEnd=0;
+    rooms.forEach(r=>{
+      const [oh,om]=(r.open||'09:00').split(':').map(Number);
+      const [ch,cm]=(r.close||'22:00').split(':').map(Number);
+      minStart=Math.min(minStart,oh*60+om); maxEnd=Math.max(maxEnd,ch*60+cm);
+    });
+    const times=[]; for(let t=minStart;t<maxEnd;t+=30) times.push(t);
+    let html='<div class="timeline">';
+    html+='<div class="tl-col tl-time-col"><div class="tl-head"></div>';
+    times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
+    html+='</div>';
+    rooms.forEach(room=>{
+      html+=`<div class="tl-col tl-room-col" data-room="${room.id}"><div class="tl-head">${room.name}</div>`;
+      times.forEach(()=>{ html+='<div class="tl-cell"></div>'; });
+      html+='</div>';
+    });
+    html+='</div>';
+    board.innerHTML=html;
+
+    const cols=board.querySelectorAll('.tl-room-col');
+    dayRes.forEach(r=>{
+      const col=[...cols].find(c=>c.dataset.room===r.roomId);
+      if(!col) return;
+      const s=toMin(r.startTime), e=toMin(r.endTime);
+      const block=document.createElement('div');
+      block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
+      block.style.top=(HEAD_PX + ((s-minStart)/30)*SLOT_PX + 3)+'px';
+      block.style.height=(((e-s)/30)*SLOT_PX - 6)+'px';
+      block.innerHTML=`<div class="bk-name">${r.userName||'예약'}</div><div class="bk-time">${r.startTime}~${r.endTime}${r.type==='coaching'?' · 코칭':''}</div>`;
+      col.appendChild(block);
+    });
+    if(dayRes.length===0) board.insertAdjacentHTML('beforeend','<div style="text-align:center; color:var(--ivory-mute); font-size:14px; margin-top:14px;">이 날은 예약이 없습니다</div>');
+
+    // 현재 시각 선 (오늘만)
+    if(isToday){
+      drawNowLine(board, minStart, maxEnd);
+      nowTimer=setInterval(()=>drawNowLine(board, minStart, maxEnd), 30000);
+    }
+  }
+
+  // 주간 뷰: 요일별로 예약 나열
+  function renderWeek(board, rooms, allRes, dows){
+    const start=new Date(); start.setDate(start.getDate()-start.getDay());
+    const end=new Date(start); end.setDate(start.getDate()+6);
+    document.getElementById('boardDate').textContent=`${start.getMonth()+1}/${start.getDate()} ~ ${end.getMonth()+1}/${end.getDate()}`;
+    const todayStr=ymd(new Date());
+    let html='<div class="week-wrap">';
+    for(let i=0;i<7;i++){
+      const d=new Date(start); d.setDate(start.getDate()+i); const ds=ymd(d);
+      const dayRes=allRes.filter(r=>r.date===ds).sort((a,b)=>a.startTime.localeCompare(b.startTime));
+      html+=`<div class="wk-daycol">
+        <div class="wk-dayhead ${ds===todayStr?'today':''}">${dows[d.getDay()]}<br><span style="font-size:13px; color:var(--ivory-dim);">${d.getMonth()+1}/${d.getDate()}</span></div>
+        <div class="wk-events">`;
+      if(dayRes.length===0) html+='<div class="wk-empty">–</div>';
+      else dayRes.forEach(r=>{
+        html+=`<div class="wk-event ${r.type==='coaching'?'coaching':'practice'}">
+          <div class="we-name">${r.userName||'예약'}</div>
+          <div class="we-info">${r.startTime}~${r.endTime} · ${r.roomName}${r.type==='coaching'?' (코칭)':''}</div>
+        </div>`;
+      });
+      html+='</div></div>';
+    }
+    html+='</div>';
+    board.innerHTML=html;
+  }
+
+  function drawNowLine(board, minStart, maxEnd){
     const old=board.querySelector('.now-line'); if(old) old.remove();
     const now=new Date();
     const nowMin=now.getHours()*60+now.getMinutes();
