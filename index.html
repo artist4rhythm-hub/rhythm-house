@@ -389,6 +389,28 @@ input,select{font-family:inherit;}
 .ms-info{flex:1;}
 .ms-when{font-size:12px;}
 .ms-applied{font-size:11px; color:var(--ivory-mute); margin-top:2px;}
+/* 주간 상세 펼침 */
+.week-detail{max-height:0; overflow:hidden; transition:max-height .3s ease; margin-top:0;}
+.week-detail.open{max-height:600px; margin-top:14px;}
+.wd-head{display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:500; color:var(--ivory); padding:10px 12px; background:var(--charcoal-3); border-radius:10px 10px 0 0; border:1px solid var(--line);}
+.wd-close{font-size:12px; color:var(--ivory-mute); cursor:pointer;}
+.wd-item{display:flex; align-items:flex-start; gap:10px; padding:10px 12px; background:var(--charcoal-2); border:1px solid var(--line-soft); border-top:none;}
+.wd-item:last-child{border-radius:0 0 10px 10px;}
+.wd-dot{width:10px; height:10px; border-radius:50%; margin-top:4px; flex-shrink:0;}
+.wd-name{font-size:14px; font-weight:500;}
+.wd-type{font-size:10px; background:rgba(196,52,47,.15); color:var(--red-soft); border-radius:4px; padding:1px 6px; margin-left:4px;}
+.wd-type.c{background:rgba(217,164,65,.15); color:var(--gold-soft);}
+.wd-sub{font-size:12px; color:var(--ivory-dim); margin-top:2px;}
+/* 1일 뷰 예약 막대 개선 */
+.tl-book{transition:transform .1s;}
+.tl-book:active{transform:scale(0.98);}
+.tl-book .bk-name{font-weight:600;}
+/* 1일 뷰 룸 칸 색상 강조 */
+.day-room-head{
+  color:#fff !important; border-radius:8px 8px 0 0;
+  font-weight:600 !important; border-bottom:none !important;
+  margin:0 2px; box-shadow:0 2px 6px rgba(0,0,0,.25);
+}
 /* 내 예약 주간 뷰 */
 .mine-week{display:flex; flex-direction:column; gap:8px;}
 .mw-day{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:10px; padding:10px 12px;}
@@ -1023,6 +1045,10 @@ const roomColors = ['#4A90D9','#3CB371','#D9A441','#B565D8','#E07A5F','#5BC0BE',
 function roomColorOf(roomId){
   const idx = rooms.findIndex(r=>r.id===roomId);
   return roomColors[(idx>=0?idx:0) % roomColors.length];
+}
+function hexToRgba(hex, a){
+  const h=hex.replace('#',''); const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
 }
 const slots = ['18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30','22:00'];
 const takenSlots = ['18:00'];
@@ -2171,7 +2197,7 @@ function renderSchedDay(wrap){
   let html='<div class="timeline"><div class="tl-col tl-time-col"><div class="tl-head"></div>';
   times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
   html+='</div>';
-  activeRooms.forEach(room=>{ const col=roomColorOf(room.id); html+=`<div class="tl-col"><div class="tl-head" style="border-bottom:3px solid ${col}; color:${col};">${room.name}</div>`; times.forEach(()=>{ html+='<div class="tl-cell"></div>'; }); html+='</div>'; });
+  activeRooms.forEach(room=>{ const col=roomColorOf(room.id); html+=`<div class="tl-col day-room-col" style="background:${hexToRgba(col,0.06)};"><div class="tl-head day-room-head" style="background:${col};">${room.name}</div>`; times.forEach(()=>{ html+='<div class="tl-cell"></div>'; }); html+='</div>'; });
   html+='</div>';
   wrap.innerHTML=html;
   const cols=wrap.querySelectorAll('.tl-col');
@@ -2257,14 +2283,14 @@ function renderSchedWeek(wrap){
     weekRes.push(ds);
   }
   html+='</div>';
+  html+='<div id="weekDetail" class="week-detail"></div>';  // 상세 펼침 영역
   wrap.innerHTML=html;
 
-  // 각 요일 컬럼에 예약 블록 배치
+  // 각 요일 컬럼에 예약 블록 배치 (막대 터치 시 상세 펼침)
   const cols=wrap.querySelectorAll('.week-col');
   cols.forEach((col, i)=>{
     const ds=weekRes[i];
     col.style.position='relative';
-    col.addEventListener('click',()=>{ schedDate=new Date(ds+'T00:00:00'); setSchedViewByName('day'); });
     allReservationsCache.filter(r=>r.date===ds).forEach(r=>{
       const startMin=toMin(r.startTime), endMin=toMin(r.endTime);
       const block=document.createElement('div');
@@ -2272,7 +2298,9 @@ function renderSchedWeek(wrap){
       block.style.top=(32 + ((startMin-minStart)/30)*26 + 2)+'px';
       block.style.height=(((endMin-startMin)/30)*26 - 4)+'px';
       block.style.borderLeft='3px solid '+roomColorOf(r.roomId);
+      block.style.cursor='pointer';
       block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>`;
+      block.addEventListener('click',(e)=>{ e.stopPropagation(); showWeekDetail(ds, r.startTime, r.endTime); });
       col.appendChild(block);
     });
   });
@@ -2280,6 +2308,42 @@ function renderSchedWeek(wrap){
   // 하단: 이번 주 회원별 정리
   const weekAll=allReservationsCache.filter(r=> weekRes.includes(r.date));
   renderMemberSummary(wrap, weekAll);
+}
+
+// 주간 뷰에서 특정 시간대를 터치하면 그 시간에 겹치는 모든 예약을 상세로 보여줌
+function showWeekDetail(ds, startTime, endTime){
+  const el=document.getElementById('weekDetail');
+  if(!el) return;
+  const s=toMin(startTime), e=toMin(endTime);
+  // 그 날, 그 시간대와 겹치는 모든 예약 (여러 방 동시간대 포함)
+  const overlaps=allReservationsCache.filter(r=>{
+    if(r.date!==ds) return false;
+    const rs=toMin(r.startTime), re=toMin(r.endTime);
+    return !(re<=s || rs>=e);
+  }).sort((a,b)=> a.startTime.localeCompare(b.startTime) || (a.roomName||'').localeCompare(b.roomName||''));
+  const dows=['일','월','화','수','목','금','토'];
+  const d=new Date(ds+'T00:00:00');
+  const head=`${d.getMonth()+1}/${d.getDate()} (${dows[d.getDay()]}) ${startTime}~${endTime} 시간대`;
+  el.innerHTML=`
+    <div class="wd-head">
+      <span>${head} · ${overlaps.length}건</span>
+      <span class="wd-close" onclick="closeWeekDetail()">✕ 닫기</span>
+    </div>
+    ${overlaps.map(r=>`
+      <div class="wd-item">
+        <span class="wd-dot" style="background:${roomColorOf(r.roomId)}"></span>
+        <div style="flex:1;">
+          <div class="wd-name">${r.userName||'회원'} <span class="wd-type ${r.type==='coaching'?'c':''}">${r.type==='coaching'?'코칭':'연습'}</span></div>
+          <div class="wd-sub">${r.roomName} · ${r.startTime}~${r.endTime} · 신청 ${fmtApplied(r.createdAt)}</div>
+        </div>
+      </div>`).join('')}
+  `;
+  el.classList.add('open');
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function closeWeekDetail(){
+  const el=document.getElementById('weekDetail');
+  if(el){ el.classList.remove('open'); el.innerHTML=''; }
 }
 // 뷰 탭 버튼을 이름으로 활성화
 function setSchedViewByName(v){
