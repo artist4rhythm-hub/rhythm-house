@@ -67,6 +67,12 @@ input,select{font-family:inherit;}
 .social-btn:active{transform:scale(.98);}
 .btn-kakao{background:#FEE500; color:#181600;}
 .btn-google{background:#fff; color:#1a1a1a; border:1px solid var(--line);}
+/* 아이디/비번 인증 폼 */
+.auth-box{width:100%; max-width:300px; display:flex; flex-direction:column; gap:10px;}
+.auth-input{width:100%; background:var(--charcoal-2); border:1px solid var(--line); border-radius:11px; padding:13px 14px; color:var(--ivory); font-size:15px;}
+.auth-input:focus{outline:none; border-color:var(--gold);}
+.auth-switch{text-align:center; font-size:13px; color:var(--ivory-mute); margin-top:8px;}
+.auth-switch span{color:var(--gold-soft); cursor:pointer; font-weight:500;}
 
 /* ---------- Home ---------- */
 .hi{font-size:14px; color:var(--ivory-dim);}
@@ -446,7 +452,8 @@ input,select{font-family:inherit;}
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
+    createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, serverTimestamp,
@@ -470,6 +477,7 @@ input,select{font-family:inherit;}
   window.RH = {
     auth, db,
     GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged,
+    createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile,
     doc, setDoc, getDoc, serverTimestamp,
     collection, addDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy
   };
@@ -494,9 +502,24 @@ input,select{font-family:inherit;}
 <div id="loginView" class="login-wrap">
   <img id="loginLogo" class="login-logo" alt="Rhythm House 로고">
   <div class="login-tag"><span class="tag-line"></span>DRUM PRACTICE STUDIO<span class="tag-line"></span></div>
-  <button class="social-btn btn-google" onclick="loginWithGoogle()">
-    <span style="font-size:16px;">G</span> Google로 시작하기
-  </button>
+
+  <!-- 로그인 폼 -->
+  <div id="loginForm" class="auth-box">
+    <input class="auth-input" id="loginId" placeholder="아이디" autocomplete="username">
+    <input class="auth-input" id="loginPw" type="password" placeholder="비밀번호" autocomplete="current-password">
+    <button class="cta cta-primary" style="margin-top:4px;" onclick="doLogin()">로그인</button>
+    <div class="auth-switch">계정이 없으신가요? <span onclick="showSignup()">회원가입</span></div>
+  </div>
+
+  <!-- 회원가입 폼 -->
+  <div id="signupForm" class="auth-box" style="display:none;">
+    <input class="auth-input" id="suName" placeholder="이름 (실명)" autocomplete="name">
+    <input class="auth-input" id="suId" placeholder="아이디 (영문/숫자)" autocomplete="username">
+    <input class="auth-input" id="suPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="new-password">
+    <input class="auth-input" id="suPw2" type="password" placeholder="비밀번호 확인" autocomplete="new-password">
+    <button class="cta cta-primary" style="margin-top:4px;" onclick="doSignup()">회원가입</button>
+    <div class="auth-switch">이미 계정이 있으신가요? <span onclick="showLogin()">로그인</span></div>
+  </div>
 </div>
 
 <!-- ================= MAIN APP ================= -->
@@ -868,25 +891,8 @@ input,select{font-family:inherit;}
     </div>
 
     <div id="adm-members" class="adm-pane" style="display:none;">
-      <div class="adm-item" style="flex-direction:column; align-items:stretch; gap:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div class="t">현우</div><span class="badge b-confirm">활성 회원</span>
-        </div>
-        <div style="display:flex; gap:8px;">
-          <div style="flex:1; background:var(--charcoal-3); border-radius:8px; padding:8px; font-size:12px;">코칭권 <b>3/4</b></div>
-          <div style="flex:1; background:var(--charcoal-3); border-radius:8px; padding:8px; font-size:12px;">연습권 <b>14/20h</b></div>
-        </div>
-        <div style="font-size:12px; color:var(--ivory-mute);">코칭 차감 방식</div>
-        <div style="display:flex; gap:6px;">
-          <button class="mini-btn" style="border-color:var(--red); color:var(--red-soft);">횟수제</button>
-          <button class="mini-btn">시간제</button>
-        </div>
-        <div style="display:flex; gap:6px;">
-          <button class="mini-btn" onclick="toast('이용권 발급 (개발 예정)')">이용권 발급</button>
-          <button class="mini-btn" onclick="toast('한도 조정 (개발 예정)')">한도 조정</button>
-        </div>
-      </div>
-      <div class="dashed-add" onclick="toast('회원 추가 (개발 예정)')">＋ 회원 추가</div>
+      <div class="step-sub" style="margin-bottom:12px;">가입한 회원 목록이에요. 누가 언제 가입했는지 확인하고 관리할 수 있어요.</div>
+      <div id="admMemberList"></div>
     </div>
 
     <div id="adm-policy" class="adm-pane" style="display:none;">
@@ -1009,15 +1015,61 @@ const takenSlots = ['18:00'];
 const blockedSlots = { time:'21:00', label:'차단' };
 
 /* ---------------- Auth (Firebase) ---------------- */
-// 구글 로그인 버튼이 부르는 함수 (리다이렉트 방식: 사파리·아이폰·카톡 브라우저 모두 안정적)
-async function loginWithGoogle(){
+/* ---------------- Auth (아이디/비번) ---------------- */
+// 아이디 → 내부 가짜 이메일 (Firebase는 이메일 형식을 요구)
+const ID_DOMAIN = '@rhythmhouse.app';
+function idToEmail(id){ return id.toLowerCase().trim() + ID_DOMAIN; }
+
+function showSignup(){ document.getElementById('loginForm').style.display='none'; document.getElementById('signupForm').style.display='flex'; }
+function showLogin(){ document.getElementById('signupForm').style.display='none'; document.getElementById('loginForm').style.display='flex'; }
+
+// 로그인
+async function doLogin(){
+  const id=document.getElementById('loginId').value.trim();
+  const pw=document.getElementById('loginPw').value;
+  if(!id||!pw){ toast('아이디와 비밀번호를 입력해주세요'); return; }
   try{
-    const provider = new window.RH.GoogleAuthProvider();
-    await window.RH.signInWithRedirect(window.RH.auth, provider);
-    // 페이지가 구글 로그인으로 넘어갔다가 돌아오면 getRedirectResult / onAuthStateChanged가 처리
+    await window.RH.signInWithEmailAndPassword(window.RH.auth, idToEmail(id), pw);
+    // 성공 시 onFirebaseAuthChanged가 앱으로 진입시킴
   }catch(e){
     console.error(e);
-    toast('로그인을 시작하지 못했어요. 다시 시도해주세요');
+    if(e.code==='auth/invalid-credential' || e.code==='auth/wrong-password' || e.code==='auth/user-not-found'){
+      toast('아이디 또는 비밀번호가 맞지 않아요');
+    } else if(e.code==='auth/invalid-email'){
+      toast('아이디 형식을 확인해주세요');
+    } else {
+      toast('로그인에 실패했어요. 다시 시도해주세요');
+    }
+  }
+}
+
+// 회원가입
+async function doSignup(){
+  const name=document.getElementById('suName').value.trim();
+  const id=document.getElementById('suId').value.trim();
+  const pw=document.getElementById('suPw').value;
+  const pw2=document.getElementById('suPw2').value;
+  if(!name||!id||!pw){ toast('모든 항목을 입력해주세요'); return; }
+  if(!/^[a-zA-Z0-9_]+$/.test(id)){ toast('아이디는 영문/숫자만 사용해주세요'); return; }
+  if(pw.length<6){ toast('비밀번호는 6자 이상이어야 해요'); return; }
+  if(pw!==pw2){ toast('비밀번호가 서로 달라요'); return; }
+  try{
+    const cred=await window.RH.createUserWithEmailAndPassword(window.RH.auth, idToEmail(id), pw);
+    // 표시 이름 설정
+    await window.RH.updateProfile(cred.user, { displayName: name });
+    // Firestore에 회원 정보 저장 (누가 언제 가입했는지)
+    await window.RH.setDoc(window.RH.doc(window.RH.db,'users',cred.user.uid),{
+      name, loginId: id, email: idToEmail(id),
+      provider:'password', role:'user',
+      createdAt: window.RH.serverTimestamp()
+    });
+    toast('회원가입 완료! 환영합니다 🥁');
+    // onFirebaseAuthChanged가 자동으로 앱 진입
+  }catch(e){
+    console.error(e);
+    if(e.code==='auth/email-already-in-use'){ toast('이미 사용 중인 아이디예요'); }
+    else if(e.code==='auth/weak-password'){ toast('비밀번호가 너무 약해요 (6자 이상)'); }
+    else { toast('회원가입에 실패했어요. 다시 시도해주세요'); }
   }
 }
 
@@ -1029,40 +1081,38 @@ function loginWithKakao(){
 // 로그인 상태가 바뀌면 Firebase가 이 함수를 부름
 window.onFirebaseAuthChanged = async function(user){
   if(user){
-    // 로그인됨: 사용자 정보를 Firestore에 저장(최초 1회 생성, 이후 갱신)
     state.currentUser = {
       uid: user.uid,
       name: user.displayName || '회원',
-      email: user.email || '',
-      photo: user.photoURL || ''
+      email: user.email || ''
     };
+    state.role = 'user';
     try{
       const ref = window.RH.doc(window.RH.db, 'users', user.uid);
       const snap = await window.RH.getDoc(ref);
-      if(!snap.exists()){
-        // 신규 회원: 기본 정보 생성
-        await window.RH.setDoc(ref, {
-          name: state.currentUser.name,
-          email: state.currentUser.email,
-          provider: 'google',
-          role: 'user',
-          createdAt: window.RH.serverTimestamp()
-        });
-      } else {
-        // 기존 회원: 역할 등 불러오기
+      if(snap.exists()){
+        // 기존 회원: 역할·이름 불러오기
         const data = snap.data();
         if(data.role) state.role = data.role;
         if(data.name) state.currentUser.name = data.name;
+      } else {
+        // 문서가 없으면(예외 상황) 최소 정보 생성
+        await window.RH.setDoc(ref, {
+          name: state.currentUser.name,
+          email: state.currentUser.email,
+          provider: 'password', role: 'user',
+          createdAt: window.RH.serverTimestamp()
+        });
       }
     }catch(e){
-      console.error('Firestore 저장 오류', e);
-      toast('회원 정보를 불러오지 못했어요 (오프라인?)');
+      console.error('Firestore 오류', e);
     }
     enterApp();
   } else {
     // 로그아웃됨: 로그인 화면으로
     document.getElementById('loginView').style.display='flex';
     document.getElementById('appView').style.display='none';
+    showLogin();
   }
 };
 
@@ -1706,6 +1756,53 @@ function admTab(name, el){
   if(name==='dash') renderAdmDash();
   if(name==='schedule') renderSchedule();
   if(name==='block') initBlockTab();
+  if(name==='members') renderMembers();
+}
+
+/* ---------------- 관리자: 회원 관리 (Firebase) ---------------- */
+let membersCache = [];
+async function renderMembers(){
+  const wrap=document.getElementById('admMemberList');
+  wrap.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'users'));
+    membersCache=snap.docs.map(d=>({uid:d.id, ...d.data()}));
+    // 가입일 순 정렬 (최신 먼저)
+    membersCache.sort((a,b)=>{
+      const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
+      const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
+      return tb-ta;
+    });
+  }catch(e){ console.error(e); wrap.innerHTML='<div class="empty">회원을 불러오지 못했어요.</div>'; return; }
+
+  if(membersCache.length===0){ wrap.innerHTML='<div class="empty">가입한 회원이 없어요.</div>'; return; }
+  wrap.innerHTML=membersCache.map(m=>{
+    const joined = m.createdAt&&m.createdAt.toDate ? fmtApplied(m.createdAt) : '기록 없음';
+    const isAdmin = m.role==='admin';
+    const roleBadge = isAdmin
+      ? '<span class="badge b-wait">관리자</span>'
+      : '<span class="badge b-confirm">회원</span>';
+    const roleBtn = isAdmin
+      ? `<button class="mini-btn" style="flex:0; padding:6px 10px;" onclick="setMemberRole('${m.uid}','user')">회원으로</button>`
+      : `<button class="mini-btn" style="flex:0; padding:6px 10px;" onclick="setMemberRole('${m.uid}','admin')">관리자로</button>`;
+    return `<div class="adm-item">
+      <div style="flex:1;">
+        <div class="t">${m.name||'이름 없음'} ${roleBadge}</div>
+        <div class="s">아이디: ${m.loginId||'-'} · 가입: ${joined}</div>
+      </div>
+      ${roleBtn}
+    </div>`;
+  }).join('');
+}
+
+async function setMemberRole(uid, role){
+  const label = role==='admin' ? '관리자로 지정' : '일반 회원으로 변경';
+  if(!confirm(`이 회원을 ${label}할까요?`)) return;
+  try{
+    await window.RH.updateDoc(window.RH.doc(window.RH.db,'users',uid),{ role });
+    toast(role==='admin'?'관리자로 지정했어요':'회원으로 변경했어요');
+    renderMembers();
+  }catch(e){ console.error(e); toast('변경에 실패했어요'); }
 }
 
 /* ---------------- 예약 차단 (Firebase) ---------------- */
