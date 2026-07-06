@@ -378,6 +378,16 @@ input,select{font-family:inherit;}
 .mg-room{height:14px; border-radius:3px; background:var(--charcoal-3); border:1px solid var(--line-soft); font-size:9px; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600;}
 .mg-room.has{border:none; text-shadow:0 1px 2px rgba(0,0,0,.4);}
 .mg-legend{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; padding-top:10px; border-top:1px solid var(--line-soft);}
+/* 회원 관리 카드 */
+.member-card{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:12px; padding:14px; margin-bottom:10px;}
+.mc-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px;}
+.mc-name{font-size:15px; font-weight:600;}
+.mc-sub{font-size:12px; color:var(--ivory-dim); margin-top:3px;}
+.mc-actions{display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding-top:10px; border-top:1px solid var(--line-soft);}
+.mc-date{background:var(--charcoal-3); border:1px solid var(--line); border-radius:8px; padding:6px 8px; color:var(--ivory); font-size:12px;}
+.badge.b-active{background:rgba(60,179,113,.18); color:#6FCF97;}
+.badge.b-expired{background:rgba(196,52,47,.18); color:var(--red-soft);}
+.badge.b-none{background:var(--charcoal-3); color:var(--ivory-mute);}
 /* 주간 오늘 헤더 강조 */
 .tl-head.today-head{color:var(--red-soft);}
 .tl-col.week-col:active{background:rgba(255,255,255,.02);}
@@ -393,6 +403,8 @@ input,select{font-family:inherit;}
 .ms-dot.coaching{background:var(--gold);}
 .ms-info{flex:1;}
 .ms-when{font-size:12px;}
+.ms-room{font-weight:600;}
+.ms-tag{font-size:10px; background:rgba(217,164,65,.15); color:var(--gold-soft); border-radius:4px; padding:1px 5px; margin-left:2px;}
 .ms-applied{font-size:11px; color:var(--ivory-mute); margin-top:2px;}
 /* 주간 상세 펼침 */
 .week-detail{max-height:0; overflow:hidden; transition:max-height .3s ease; margin-top:0;}
@@ -553,6 +565,7 @@ input,select{font-family:inherit;}
   <!-- 회원가입 폼 -->
   <div id="signupForm" class="auth-box" style="display:none;">
     <input class="auth-input" id="suName" placeholder="이름 (실명)" autocomplete="name">
+    <input class="auth-input" id="suPhone" type="tel" placeholder="연락처 (예: 010-1234-5678)" autocomplete="tel">
     <input class="auth-input" id="suId" placeholder="아이디 (영문/숫자)" autocomplete="username">
     <input class="auth-input" id="suPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="new-password">
     <input class="auth-input" id="suPw2" type="password" placeholder="비밀번호 확인" autocomplete="new-password">
@@ -1096,25 +1109,25 @@ async function doLogin(){
 // 회원가입
 async function doSignup(){
   const name=document.getElementById('suName').value.trim();
+  const phone=document.getElementById('suPhone').value.trim();
   const id=document.getElementById('suId').value.trim();
   const pw=document.getElementById('suPw').value;
   const pw2=document.getElementById('suPw2').value;
   if(!name||!id||!pw){ toast('모든 항목을 입력해주세요'); return; }
+  if(!phone){ toast('연락처를 입력해주세요'); return; }
   if(!/^[a-zA-Z0-9_]+$/.test(id)){ toast('아이디는 영문/숫자만 사용해주세요'); return; }
   if(pw.length<6){ toast('비밀번호는 6자 이상이어야 해요'); return; }
   if(pw!==pw2){ toast('비밀번호가 서로 달라요'); return; }
   try{
     const cred=await window.RH.createUserWithEmailAndPassword(window.RH.auth, idToEmail(id), pw);
-    // 표시 이름 설정
     await window.RH.updateProfile(cred.user, { displayName: name });
-    // Firestore에 회원 정보 저장 (누가 언제 가입했는지)
     await window.RH.setDoc(window.RH.doc(window.RH.db,'users',cred.user.uid),{
-      name, loginId: id, email: idToEmail(id),
+      name, phone, loginId: id, email: idToEmail(id),
       provider:'password', role:'user',
+      membershipUntil: null,   // 멤버십 만료일 (관리자가 지정)
       createdAt: window.RH.serverTimestamp()
     });
     toast('회원가입 완료! 환영합니다 🥁');
-    // onFirebaseAuthChanged가 자동으로 앱 진입
   }catch(e){
     console.error(e);
     if(e.code==='auth/email-already-in-use'){ toast('이미 사용 중인 아이디예요'); }
@@ -1817,7 +1830,6 @@ async function renderMembers(){
   try{
     const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'users'));
     membersCache=snap.docs.map(d=>({uid:d.id, ...d.data()}));
-    // 가입일 순 정렬 (최신 먼저)
     membersCache.sort((a,b)=>{
       const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
       const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
@@ -1826,23 +1838,63 @@ async function renderMembers(){
   }catch(e){ console.error(e); wrap.innerHTML='<div class="empty">회원을 불러오지 못했어요.</div>'; return; }
 
   if(membersCache.length===0){ wrap.innerHTML='<div class="empty">가입한 회원이 없어요.</div>'; return; }
+
+  const todayStr=ymd(new Date());
   wrap.innerHTML=membersCache.map(m=>{
     const joined = m.createdAt&&m.createdAt.toDate ? fmtApplied(m.createdAt) : '기록 없음';
     const isAdmin = m.role==='admin';
-    const roleBadge = isAdmin
-      ? '<span class="badge b-wait">관리자</span>'
-      : '<span class="badge b-confirm">회원</span>';
-    const roleBtn = isAdmin
-      ? `<button class="mini-btn" style="flex:0; padding:6px 10px;" onclick="setMemberRole('${m.uid}','user')">회원으로</button>`
-      : `<button class="mini-btn" style="flex:0; padding:6px 10px;" onclick="setMemberRole('${m.uid}','admin')">관리자로</button>`;
-    return `<div class="adm-item">
-      <div style="flex:1;">
-        <div class="t">${m.name||'이름 없음'} ${roleBadge}</div>
-        <div class="s">아이디: ${m.loginId||'-'} · 가입: ${joined}</div>
+    // 멤버십 상태
+    let memBadge='';
+    if(m.membershipUntil){
+      const expired = m.membershipUntil < todayStr;
+      memBadge = expired
+        ? `<span class="badge b-expired">만료 (${m.membershipUntil})</span>`
+        : `<span class="badge b-active">이용중 (~${m.membershipUntil})</span>`;
+    } else {
+      memBadge = `<span class="badge b-none">멤버십 미설정</span>`;
+    }
+    const roleBadge = isAdmin ? '<span class="badge b-wait">관리자</span>' : '';
+
+    return `<div class="member-card">
+      <div class="mc-top">
+        <div>
+          <div class="mc-name">${m.name||'이름 없음'} ${roleBadge}</div>
+          <div class="mc-sub">아이디 ${m.loginId||'-'} · ${m.phone||'연락처 없음'}</div>
+          <div class="mc-sub">가입 ${joined}</div>
+        </div>
+        <div>${memBadge}</div>
       </div>
-      ${roleBtn}
+      <div class="mc-actions">
+        <input type="date" class="mc-date" id="mem-date-${m.uid}" value="${m.membershipUntil||''}">
+        <button class="mini-btn" onclick="setMembership('${m.uid}')">만료일 저장</button>
+        ${isAdmin
+          ? `<button class="mini-btn" onclick="setMemberRole('${m.uid}','user')">회원으로</button>`
+          : `<button class="mini-btn" onclick="setMemberRole('${m.uid}','admin')">관리자로</button>`}
+        <button class="mini-btn danger" onclick="removeMember('${m.uid}','${(m.name||'').replace(/'/g,'')}')">삭제</button>
+      </div>
     </div>`;
   }).join('');
+}
+
+// 멤버십 만료일 저장
+async function setMembership(uid){
+  const val=document.getElementById('mem-date-'+uid).value;
+  try{
+    await window.RH.updateDoc(window.RH.doc(window.RH.db,'users',uid),{ membershipUntil: val||null });
+    toast(val?'멤버십 만료일을 저장했어요':'멤버십을 미설정으로 되돌렸어요');
+    renderMembers();
+  }catch(e){ console.error(e); toast('저장에 실패했어요'); }
+}
+
+// 회원 삭제 (Firestore 문서 삭제)
+async function removeMember(uid, name){
+  if(uid===state.currentUser.uid){ toast('본인 계정은 삭제할 수 없어요'); return; }
+  if(!confirm(`"${name}" 회원을 목록에서 삭제할까요?\n(예약 기록은 남습니다)`)) return;
+  try{
+    await window.RH.deleteDoc(window.RH.doc(window.RH.db,'users',uid));
+    toast('회원이 삭제되었어요');
+    renderMembers();
+  }catch(e){ console.error(e); toast('삭제에 실패했어요'); }
 }
 
 async function setMemberRole(uid, role){
@@ -2241,10 +2293,11 @@ function renderMemberSummary(wrap, resList){
     html+=`<div class="ms-card"><div class="ms-name">${nm} <span class="ms-cnt">${items.length}건</span></div>`;
     items.forEach(r=>{
       const applied = fmtApplied(r.createdAt);
+      const rc = roomColorOf(r.roomId);
       html+=`<div class="ms-row">
-        <span class="ms-dot ${r.type==='coaching'?'coaching':'practice'}"></span>
+        <span class="ms-dot" style="background:${rc};"></span>
         <div class="ms-info">
-          <div class="ms-when">${fmtDateLabel(r.date)} ${r.startTime}~${r.endTime} · ${r.roomName}</div>
+          <div class="ms-when">${fmtDateLabel(r.date)} ${r.startTime}~${r.endTime} · <span class="ms-room" style="color:${rc};">${r.roomName}</span> ${r.type==='coaching'?'<span class="ms-tag">코칭</span>':''}</div>
           <div class="ms-applied">신청: ${applied}</div>
         </div>
       </div>`;
