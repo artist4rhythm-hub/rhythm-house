@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>리듬 하우스 · 실시간 예약 현황</title>
+<style>
+  :root{
+    --charcoal:#0E0D0C; --charcoal-2:#17151300; --charcoal-2s:#1A1817;
+    --charcoal-3:#211E1C; --ivory:#F2EEE6; --ivory-dim:#B8B0A2;
+    --ivory-mute:#7A7266; --red:#C4342F; --red-dark:#8E211D; --red-soft:#E05A54;
+    --gold:#D9A441; --gold-soft:#E8C078; --line:#2E2A26; --line-soft:#221F1C;
+  }
+  *{margin:0; padding:0; box-sizing:border-box;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:
+      radial-gradient(circle at 15% 15%, rgba(196,52,47,.08), transparent 45%),
+      radial-gradient(circle at 85% 85%, rgba(217,164,65,.06), transparent 45%),
+      var(--charcoal);
+    color:var(--ivory); min-height:100vh; padding:24px;
+  }
+  .board-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:20px; flex-wrap:wrap; gap:12px;
+  }
+  .bh-left{display:flex; align-items:baseline; gap:14px;}
+  .bh-title{font-size:26px; font-weight:800; letter-spacing:-0.5px;}
+  .bh-title b{color:var(--red-soft);}
+  .bh-date{font-size:16px; color:var(--ivory-dim);}
+  .bh-clock{
+    font-size:32px; font-weight:800; font-variant-numeric:tabular-nums;
+    color:var(--gold-soft); letter-spacing:1px;
+  }
+  .bh-live{
+    display:inline-flex; align-items:center; gap:6px; font-size:12px;
+    color:var(--red-soft); margin-left:10px;
+  }
+  .bh-live .dot{width:8px; height:8px; border-radius:50%; background:var(--red-soft); animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.3;}}
+
+  .legend{display:flex; gap:16px; margin-bottom:14px; font-size:13px; color:var(--ivory-dim);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend .sw{width:14px; height:14px; border-radius:4px;}
+  .sw.practice{background:linear-gradient(135deg,var(--red),var(--red-dark));}
+  .sw.coaching{background:linear-gradient(135deg,var(--gold),#A8781F);}
+
+  .board{position:relative; background:var(--charcoal-2s); border:1px solid var(--line); border-radius:16px; padding:16px; overflow-x:auto;}
+  .timeline{display:flex; gap:10px; position:relative; min-width:max-content;}
+  .tl-col{flex:0 0 auto;}
+  .tl-time-col{min-width:64px;}
+  .tl-room-col{min-width:150px;}
+  .tl-head{
+    height:44px; display:flex; align-items:center; justify-content:center;
+    font-size:17px; font-weight:700; border-bottom:2px solid var(--line);
+    position:sticky; top:0; background:var(--charcoal-2s);
+  }
+  .tl-time-col .tl-head{color:transparent;}
+  .tl-slot{
+    height:40px; display:flex; align-items:flex-start; justify-content:flex-end;
+    padding-right:8px; padding-top:2px; font-size:13px; color:var(--ivory-mute);
+    border-bottom:1px solid var(--line-soft);
+  }
+  .tl-cell{height:40px; border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft);}
+  .tl-room-col{position:relative;}
+  .tl-book{
+    position:absolute; left:4px; right:4px; border-radius:8px; padding:6px 10px;
+    color:#fff; overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,.35); z-index:3;
+  }
+  .tl-book.practice{background:linear-gradient(135deg,var(--red),var(--red-dark));}
+  .tl-book.coaching{background:linear-gradient(135deg,var(--gold),#A8781F); color:#1A1817;}
+  .tl-book .bk-name{font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .tl-book .bk-time{font-size:12px; opacity:.9; margin-top:1px;}
+
+  .now-line{position:absolute; height:2px; background:var(--red-soft); z-index:6; pointer-events:none; box-shadow:0 0 8px var(--red-soft);}
+  .now-line::before{content:""; position:absolute; left:-5px; top:-4px; width:10px; height:10px; border-radius:50%; background:var(--red-soft);}
+
+  .empty-board{text-align:center; color:var(--ivory-mute); font-size:16px; padding:60px;}
+  .foot{text-align:center; color:var(--ivory-mute); font-size:12px; margin-top:16px;}
+
+  @media (max-width:640px){
+    body{padding:14px;}
+    .bh-title{font-size:20px;} .bh-clock{font-size:24px;}
+    .tl-room-col{min-width:120px;} .tl-time-col{min-width:52px;}
+  }
+</style>
+</head>
+<body>
+  <div class="board-head">
+    <div class="bh-left">
+      <div class="bh-title">리듬 하우스 <b>예약 현황</b></div>
+      <div class="bh-date" id="boardDate">–</div>
+    </div>
+    <div class="bh-clock" id="boardClock">--:--<span class="bh-live"><span class="dot"></span>LIVE</span></div>
+  </div>
+  <div class="legend">
+    <span><span class="sw practice"></span> 연습</span>
+    <span><span class="sw coaching"></span> 코칭</span>
+  </div>
+  <div class="board" id="board">
+    <div class="empty-board">불러오는 중…</div>
+  </div>
+  <div class="foot" id="foot">1분마다 자동으로 갱신됩니다</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC9YZ4q5H59qChiYDXgGBQSGb-SeEtoE30",
+    authDomain: "rhythm-house-cc90c.firebaseapp.com",
+    projectId: "rhythm-house-cc90c",
+    storageBucket: "rhythm-house-cc90c.firebasestorage.app",
+    messagingSenderId: "417316021673",
+    appId: "1:417316021673:web:b6b220afcad08f96b790b8"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const SLOT_PX = 40;   // 30분 슬롯 높이
+  const HEAD_PX = 44;   // 헤더 높이
+
+  function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+  function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+
+  let nowTimer=null;
+
+  async function loadBoard(){
+    const board=document.getElementById('board');
+    const dows=['일','월','화','수','목','금','토'];
+    const today=new Date();
+    document.getElementById('boardDate').textContent=`${today.getMonth()+1}월 ${today.getDate()}일 (${dows[today.getDay()]})`;
+    const dateStr=ymd(today);
+
+    try{
+      // 연습실
+      const roomSnap=await getDocs(collection(db,'rooms'));
+      let rooms=roomSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(r=>r.active!==false);
+      // createdAt 순 정렬
+      rooms.sort((a,b)=>{
+        const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
+        const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
+        return ta-tb;
+      });
+      if(rooms.length===0){ board.innerHTML='<div class="empty-board">등록된 연습실이 없습니다.</div>'; return; }
+
+      // 예약
+      const resSnap=await getDocs(collection(db,'reservations'));
+      const dayRes=resSnap.docs.map(d=>({id:d.id, ...d.data()}))
+        .filter(r=>r.date===dateStr && r.status==='confirmed');
+
+      // 운영시간 범위
+      let minStart=24*60, maxEnd=0;
+      rooms.forEach(r=>{
+        const [oh,om]=(r.open||'09:00').split(':').map(Number);
+        const [ch,cm]=(r.close||'22:00').split(':').map(Number);
+        minStart=Math.min(minStart,oh*60+om); maxEnd=Math.max(maxEnd,ch*60+cm);
+      });
+      const times=[]; for(let t=minStart;t<maxEnd;t+=30) times.push(t);
+
+      // 그리드
+      let html='<div class="timeline">';
+      html+='<div class="tl-col tl-time-col"><div class="tl-head"></div>';
+      times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
+      html+='</div>';
+      rooms.forEach(room=>{
+        html+=`<div class="tl-col tl-room-col" data-room="${room.id}"><div class="tl-head">${room.name}</div>`;
+        times.forEach(()=>{ html+='<div class="tl-cell"></div>'; });
+        html+='</div>';
+      });
+      html+='</div>';
+      board.innerHTML=html;
+
+      // 예약 블록 배치
+      const cols=board.querySelectorAll('.tl-room-col');
+      dayRes.forEach(r=>{
+        const col=[...cols].find(c=>c.dataset.room===r.roomId);
+        if(!col) return;
+        const s=toMin(r.startTime), e=toMin(r.endTime);
+        const block=document.createElement('div');
+        block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
+        block.style.top=(HEAD_PX + ((s-minStart)/30)*SLOT_PX + 3)+'px';
+        block.style.height=(((e-s)/30)*SLOT_PX - 6)+'px';
+        block.innerHTML=`<div class="bk-name">${r.userName||'예약'}</div><div class="bk-time">${r.startTime}~${r.endTime}${r.type==='coaching'?' · 코칭':''}</div>`;
+        col.appendChild(block);
+      });
+
+      // 현재 시각 선
+      drawNowLine(board, minStart, maxEnd, times.length);
+      if(nowTimer) clearInterval(nowTimer);
+      nowTimer=setInterval(()=>drawNowLine(board, minStart, maxEnd, times.length), 30000);
+
+    }catch(e){
+      console.error(e);
+      board.innerHTML='<div class="empty-board">현황을 불러오지 못했습니다. 잠시 후 다시 시도합니다.</div>';
+    }
+  }
+
+  function drawNowLine(board, minStart, maxEnd, slotCount){
+    const old=board.querySelector('.now-line'); if(old) old.remove();
+    const now=new Date();
+    const nowMin=now.getHours()*60+now.getMinutes();
+    if(nowMin<minStart || nowMin>maxEnd) return;
+    const timeline=board.querySelector('.timeline');
+    if(!timeline) return;
+    const top=HEAD_PX + ((nowMin-minStart)/30)*SLOT_PX;
+    const line=document.createElement('div');
+    line.className='now-line';
+    line.style.top=top+'px';
+    line.style.left='16px';
+    line.style.width=(timeline.scrollWidth)+'px';
+    timeline.appendChild(line);
+  }
+
+  function updateClock(){
+    const now=new Date();
+    const hh=String(now.getHours()).padStart(2,'0');
+    const mm=String(now.getMinutes()).padStart(2,'0');
+    const ss=String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('boardClock').innerHTML=
+      `${hh}:${mm}:${ss}<span class="bh-live"><span class="dot"></span>LIVE</span>`;
+  }
+
+  // 초기 실행
+  updateClock();
+  setInterval(updateClock, 1000);       // 시계: 1초
+  loadBoard();
+  setInterval(loadBoard, 60000);        // 예약 데이터: 1분마다 새로 불러오기
+</script>
+</body>
+</html>
