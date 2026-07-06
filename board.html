@@ -83,6 +83,8 @@
     border-bottom:1px solid var(--line-soft);
   }
   .tl-cell{height:40px; border-bottom:1px solid var(--line-soft); border-left:1px solid var(--line-soft);}
+  .timeline .tl-room-col{border-right:1px solid var(--line);}
+  .timeline .tl-room-col:nth-of-type(even){background:rgba(255,255,255,.02);}
   .tl-room-col{position:relative;}
   .tl-book{
     position:absolute; left:4px; right:4px; border-radius:8px; padding:6px 10px;
@@ -145,6 +147,8 @@
 
   const SLOT_PX = 40;   // 30분 슬롯 높이
   const HEAD_PX = 44;   // 헤더 높이
+  const ROOM_COLORS = ['#4A90D9','#3CB371','#D9A441','#B565D8','#E07A5F','#5BC0BE','#E85D9E','#8D8741'];
+  let roomColorMap = {};  // roomId → color (등록 순서대로)
 
   function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
   function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
@@ -167,6 +171,9 @@
       const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
       return ta-tb;
     });
+    // 룸 색상 배정 (등록 순서대로)
+    roomColorMap={};
+    rooms.forEach((r,i)=>{ roomColorMap[r.id]=ROOM_COLORS[i%ROOM_COLORS.length]; });
     const resSnap=await getDocs(collection(db,'reservations'));
     const res=resSnap.docs.map(d=>({id:d.id, ...d.data()})).filter(r=>r.status==='confirmed');
     return {rooms, res};
@@ -212,7 +219,8 @@
     times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
     html+='</div>';
     rooms.forEach(room=>{
-      html+=`<div class="tl-col tl-room-col" data-room="${room.id}"><div class="tl-head">${room.name}</div>`;
+      const rc=roomColorMap[room.id]||'#888';
+      html+=`<div class="tl-col tl-room-col" data-room="${room.id}"><div class="tl-head" style="border-bottom:3px solid ${rc}; color:${rc};">${room.name}</div>`;
       times.forEach(()=>{ html+='<div class="tl-cell"></div>'; });
       html+='</div>';
     });
@@ -228,6 +236,7 @@
       block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
       block.style.top=(HEAD_PX + ((s-minStart)/30)*SLOT_PX + 3)+'px';
       block.style.height=(((e-s)/30)*SLOT_PX - 6)+'px';
+      block.style.borderLeft='4px solid '+(roomColorMap[r.roomId]||'#888');
       block.innerHTML=`<div class="bk-name">${r.userName||'예약'}</div><div class="bk-time">${r.startTime}~${r.endTime}${r.type==='coaching'?' · 코칭':''}</div>`;
       col.appendChild(block);
     });
@@ -255,7 +264,7 @@
         <div class="wk-events">`;
       if(dayRes.length===0) html+='<div class="wk-empty">–</div>';
       else dayRes.forEach(r=>{
-        html+=`<div class="wk-event ${r.type==='coaching'?'coaching':'practice'}">
+        html+=`<div class="wk-event ${r.type==='coaching'?'coaching':'practice'}" style="border-left:4px solid ${roomColorMap[r.roomId]||'#888'};">
           <div class="we-name">${r.userName||'예약'}</div>
           <div class="we-info">${r.startTime}~${r.endTime} · ${r.roomName}${r.type==='coaching'?' (코칭)':''}</div>
         </div>`;

@@ -319,6 +319,13 @@ input,select{font-family:inherit;}
 .tl-book.coaching{background:linear-gradient(135deg, var(--gold), #A8781F); color:#1A1817;}
 .tl-book .bk-name{font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .tl-empty-msg{text-align:center; color:var(--ivory-mute); font-size:13px; padding:30px; border:1px dashed var(--line); border-radius:12px;}
+/* 룸 색상 범례 */
+.room-legend{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px;}
+.rl-item{display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ivory-dim);}
+.rl-dot{width:12px; height:12px; border-radius:4px;}
+/* 타임라인 칸 구분 강화 */
+.timeline .tl-col:not(.tl-time-col){border-right:1px solid var(--line);}
+.timeline .tl-col:not(.tl-time-col):nth-child(even){background:rgba(255,255,255,.015);}
 /* 데이 캘린더 (애플 캘린더 느낌) */
 .daycal{position:relative; background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:12px; padding:8px 8px 8px 0; overflow:hidden;}
 .daycal-row{display:flex; height:44px; position:relative;}
@@ -788,6 +795,7 @@ input,select{font-family:inherit;}
         <button class="cal-nav" onclick="schedMove(1)">›</button>
       </div>
       <div class="sched-today-btn" onclick="schedToday()">오늘로</div>
+      <div id="roomLegend" class="room-legend"></div>
       <div id="schedTimeline"></div>
     </div>
 
@@ -1010,6 +1018,12 @@ let state = {
 };
 let rooms = [];  // Firebase에서 로드됨
 const roomIcons = ['🥁','🎛️','🎵','🎸','🎹'];  // 등록 순서대로 아이콘 배정
+// 룸별 고유 색상 (등록 순서대로 배정) — 예약 현황에서 방 구분용
+const roomColors = ['#4A90D9','#3CB371','#D9A441','#B565D8','#E07A5F','#5BC0BE','#E85D9E','#8D8741'];
+function roomColorOf(roomId){
+  const idx = rooms.findIndex(r=>r.id===roomId);
+  return roomColors[(idx>=0?idx:0) % roomColors.length];
+}
 const slots = ['18:00','18:30','19:00','19:30','20:00','20:30','21:00','21:30','22:00'];
 const takenSlots = ['18:00'];
 const blockedSlots = { time:'21:00', label:'차단' };
@@ -2076,6 +2090,7 @@ function renderDayCalendar(cal, dayRes, minH, maxH, isToday){
     ev.style.height=Math.max(height,20)+'px';
     ev.style.left=(r._lane*widthPct)+'%';
     ev.style.width='calc('+widthPct+'% - 4px)';
+    ev.style.borderLeft='3px solid '+roomColorOf(r.roomId);
     ev.innerHTML=`<div class="ev-title">${r.roomName}</div><div class="ev-sub">${r.startTime} ${r.userName||''}</div>`;
     track.appendChild(ev);
   });
@@ -2126,10 +2141,20 @@ async function renderSchedule(){
   try{
     if(rooms.length===0) await loadRooms();
     await loadAllReservations();
+    renderRoomLegend();
     if(schedView==='day') renderSchedDay(wrap);
     else if(schedView==='week') renderSchedWeek(wrap);
     else if(schedView==='month') renderSchedMonth(wrap);
   }catch(e){ console.error(e); wrap.innerHTML='<div class="tl-empty-msg">불러오지 못했어요.</div>'; }
+}
+
+// 룸 색상 범례
+function renderRoomLegend(){
+  const el=document.getElementById('roomLegend');
+  if(!el) return;
+  const activeRooms=rooms.filter(r=>r.active);
+  if(activeRooms.length===0){ el.innerHTML=''; return; }
+  el.innerHTML=activeRooms.map(r=>`<span class="rl-item"><span class="rl-dot" style="background:${roomColorOf(r.id)}"></span>${r.name}</span>`).join('');
 }
 
 // 1일 뷰: 연습실별 타임라인 (기존 방식)
@@ -2146,7 +2171,7 @@ function renderSchedDay(wrap){
   let html='<div class="timeline"><div class="tl-col tl-time-col"><div class="tl-head"></div>';
   times.forEach(t=>{ html+=`<div class="tl-slot">${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}</div>`; });
   html+='</div>';
-  activeRooms.forEach(room=>{ html+=`<div class="tl-col"><div class="tl-head">${room.name}</div>`; times.forEach(()=>{ html+='<div class="tl-cell"></div>'; }); html+='</div>'; });
+  activeRooms.forEach(room=>{ const col=roomColorOf(room.id); html+=`<div class="tl-col"><div class="tl-head" style="border-bottom:3px solid ${col}; color:${col};">${room.name}</div>`; times.forEach(()=>{ html+='<div class="tl-cell"></div>'; }); html+='</div>'; });
   html+='</div>';
   wrap.innerHTML=html;
   const cols=wrap.querySelectorAll('.tl-col');
@@ -2159,6 +2184,7 @@ function renderSchedDay(wrap){
     block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
     block.style.top=(32 + ((startMin-minStart)/30)*26 + 2)+'px';
     block.style.height=(((endMin-startMin)/30)*26 - 4)+'px';
+    block.style.borderLeft='3px solid '+roomColorOf(r.roomId);
     block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>${r.startTime}`;
     col.style.position='relative'; col.appendChild(block);
   });
@@ -2245,6 +2271,7 @@ function renderSchedWeek(wrap){
       block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
       block.style.top=(32 + ((startMin-minStart)/30)*26 + 2)+'px';
       block.style.height=(((endMin-startMin)/30)*26 - 4)+'px';
+      block.style.borderLeft='3px solid '+roomColorOf(r.roomId);
       block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>`;
       col.appendChild(block);
     });
