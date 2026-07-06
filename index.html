@@ -363,7 +363,7 @@ input,select{font-family:inherit;}
 /* 월간 달력 (작게, 정보 다 보이게) */
 .month-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:3px;}
 .mg-dow{text-align:center; font-size:11px; color:var(--ivory-mute); padding:4px 0;}
-.mg-cell{aspect-ratio:0.8; border:1px solid var(--line-soft); border-radius:7px; padding:4px; display:flex; flex-direction:column; gap:2px; overflow:hidden; min-height:56px;}
+.mg-cell{border:1px solid var(--line-soft); border-radius:7px; padding:4px; display:flex; flex-direction:column; gap:2px; overflow:hidden; min-height:64px;}
 .mg-cell.empty{visibility:hidden;}
 .mg-cell.today{border-color:var(--red-soft); background:rgba(196,52,47,.06);}
 .mg-date{font-size:11px; color:var(--ivory-dim); font-weight:500;}
@@ -373,6 +373,11 @@ input,select{font-family:inherit;}
 .mg-bar{height:3px; border-radius:2px;}
 .mg-bar.practice{background:var(--red-soft);}
 .mg-bar.coaching{background:var(--gold);}
+/* 월간 연습실별 세로 분리 */
+.mg-rooms{display:flex; flex-direction:column; gap:2px; margin-top:3px;}
+.mg-room{height:14px; border-radius:3px; background:var(--charcoal-3); border:1px solid var(--line-soft); font-size:9px; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600;}
+.mg-room.has{border:none; text-shadow:0 1px 2px rgba(0,0,0,.4);}
+.mg-legend{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; padding-top:10px; border-top:1px solid var(--line-soft);}
 /* 주간 오늘 헤더 강조 */
 .tl-head.today-head{color:var(--red-soft);}
 .tl-col.week-col:active{background:rgba(255,255,255,.02);}
@@ -405,6 +410,11 @@ input,select{font-family:inherit;}
 .tl-book{transition:transform .1s;}
 .tl-book:active{transform:scale(0.98);}
 .tl-book .bk-name{font-weight:600;}
+/* 주간 룸 색 막대 (겹치면 나란히) */
+.wk-book{position:absolute; border-radius:5px; padding:2px 4px; color:#fff; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.3); z-index:3; transition:transform .1s;}
+.wk-book:active{transform:scale(0.97);}
+.wk-bname{font-size:10px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 2px rgba(0,0,0,.4); display:flex; align-items:center; gap:3px;}
+.wk-badge{display:inline-block; font-size:8px; font-weight:700; background:rgba(255,255,255,.85); color:#1A1817; border-radius:3px; padding:0 3px; line-height:1.4;}
 /* 1일 뷰 룸 칸 색상 강조 */
 .day-room-head{
   color:#fff !important; border-radius:8px 8px 0 0;
@@ -2286,20 +2296,38 @@ function renderSchedWeek(wrap){
   html+='<div id="weekDetail" class="week-detail"></div>';  // 상세 펼침 영역
   wrap.innerHTML=html;
 
-  // 각 요일 컬럼에 예약 블록 배치 (막대 터치 시 상세 펼침)
+  // 각 요일 컬럼에 예약 블록 배치 (룸 색으로 채우고, 겹치면 나란히)
   const cols=wrap.querySelectorAll('.week-col');
   cols.forEach((col, i)=>{
     const ds=weekRes[i];
     col.style.position='relative';
-    allReservationsCache.filter(r=>r.date===ds).forEach(r=>{
+    const dayRes=allReservationsCache.filter(r=>r.date===ds)
+      .sort((a,b)=> a.startTime.localeCompare(b.startTime));
+    // 겹침 레인 계산: 시간이 겹치는 예약끼리 가로로 나눔
+    const laneEnd=[]; // 각 레인의 마지막 종료(분)
+    dayRes.forEach(r=>{
+      const s=toMin(r.startTime), e=toMin(r.endTime);
+      let lane=0;
+      while(lane<laneEnd.length && laneEnd[lane]>s) lane++;
+      laneEnd[lane]=e; r._lane=lane; r._laneMax=0;
+    });
+    // 그 날의 최대 동시 겹침 수 = 레인 개수
+    const laneCount=Math.max(1, laneEnd.length);
+    dayRes.forEach(r=>{
       const startMin=toMin(r.startTime), endMin=toMin(r.endTime);
+      const rc=roomColorOf(r.roomId);
       const block=document.createElement('div');
-      block.className='tl-book '+(r.type==='coaching'?'coaching':'practice');
+      block.className='wk-book';
       block.style.top=(32 + ((startMin-minStart)/30)*26 + 2)+'px';
       block.style.height=(((endMin-startMin)/30)*26 - 4)+'px';
-      block.style.borderLeft='3px solid '+roomColorOf(r.roomId);
+      block.style.background=rc;
+      const w=100/laneCount;
+      block.style.left='calc('+(r._lane*w)+'% + 1px)';
+      block.style.width='calc('+w+'% - 2px)';
       block.style.cursor='pointer';
-      block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>`;
+      // 연습/코칭 구분은 작은 배지로
+      const badge = r.type==='coaching' ? '<span class="wk-badge">C</span>' : '';
+      block.innerHTML=`<div class="wk-bname">${r.userName||'회원'}${badge}</div>`;
       block.addEventListener('click',(e)=>{ e.stopPropagation(); showWeekDetail(ds, r.startTime, r.endTime); });
       col.appendChild(block);
     });
@@ -2362,12 +2390,14 @@ function renderSchedMonth(wrap){
   const first=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
   const todayStr=ymd(new Date());
-  // 날짜별 예약 집계
-  const byDate={};
+  const activeRooms=rooms.filter(r=>r.active);
+  // 날짜별·연습실별 예약 집계
+  const byDateRoom={};  // { '2026-07-06': { roomId: count } }
   allReservationsCache.forEach(r=>{
     const d=new Date(r.date+'T00:00:00');
     if(d.getFullYear()===y && d.getMonth()===m){
-      (byDate[r.date]=byDate[r.date]||{practice:0,coaching:0})[r.type==='coaching'?'coaching':'practice']++;
+      const rec=(byDateRoom[r.date]=byDateRoom[r.date]||{});
+      rec[r.roomId]=(rec[r.roomId]||0)+1;
     }
   });
   const dows=['일','월','화','수','목','금','토'];
@@ -2376,19 +2406,23 @@ function renderSchedMonth(wrap){
   for(let i=0;i<first;i++) html+='<div class="mg-cell empty"></div>';
   for(let dd=1;dd<=days;dd++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
-    const c=byDate[ds];
-    const total=c?(c.practice+c.coaching):0;
-    let bars='';
-    if(c){
-      for(let i=0;i<Math.min(c.practice,3);i++) bars+='<div class="mg-bar practice"></div>';
-      for(let i=0;i<Math.min(c.coaching,3);i++) bars+='<div class="mg-bar coaching"></div>';
-    }
+    const rec=byDateRoom[ds]||{};
+    // 연습실별 칸 (세로로 분리, 각 방 색)
+    let roomRows='';
+    activeRooms.forEach(room=>{
+      const cnt=rec[room.id]||0;
+      const rc=roomColorOf(room.id);
+      roomRows+=`<div class="mg-room ${cnt?'has':''}" style="${cnt?`background:${rc};`:''}">${cnt?cnt:''}</div>`;
+    });
     html+=`<div class="mg-cell ${ds===todayStr?'today':''}" onclick="goToDayView('${ds}')" style="cursor:pointer;">
       <div class="mg-date">${dd}</div>
-      ${total?`<div class="mg-count">${total}건</div>`:''}
-      <div class="mg-bars">${bars}</div>
+      <div class="mg-rooms">${roomRows}</div>
     </div>`;
   }
+  html+='</div>';
+  // 룸 색 범례 (월간 하단)
+  html+='<div class="mg-legend">';
+  activeRooms.forEach(room=>{ html+=`<span class="rl-item"><span class="rl-dot" style="background:${roomColorOf(room.id)}"></span>${room.name}</span>`; });
   html+='</div>';
   wrap.innerHTML=html;
 
