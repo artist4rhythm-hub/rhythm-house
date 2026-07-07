@@ -1280,22 +1280,30 @@ function renderHistory(){
 async function renderHome(){
   // 멤버십 상태에 실제 이용권 반영
   const mb=document.getElementById('mbStatus');
+  const u=state.currentUser;
+  const todayStr=ymd(new Date());
+  const isMember = u.membershipUntil && u.membershipUntil>=todayStr;
   if(mb){
-    const u=state.currentUser;
     if(state.role==='admin'){
       mb.innerHTML='관리자 계정';
     } else if(!u.membershipUntil){
       mb.innerHTML='멤버십 미가입 · 열람만 가능';
+    } else if(u.membershipUntil < todayStr){
+      mb.innerHTML=`만료됨 (${u.membershipUntil}) · 갱신 필요`;
     } else {
-      const todayStr=ymd(new Date());
-      const expired = u.membershipUntil < todayStr;
-      if(expired){
-        mb.innerHTML=`만료됨 (${u.membershipUntil}) · 갱신 필요`;
-      } else {
-        mb.innerHTML=`이용 중 · 연습 ${u.practiceHours||0}시간 / 코칭 ${u.coachCount||0}회 · ~${u.membershipUntil}`;
-      }
+      mb.innerHTML=`이용 중 · ~${u.membershipUntil}`;
     }
   }
+  // 홈 이용권 카드 실제 값
+  const co = u.coachCount||0, pr = u.practiceHours||0;
+  const coachVal=document.getElementById('coachVal');
+  const pracVal=document.getElementById('pracVal');
+  if(coachVal) coachVal.innerHTML=`${co}<small> 회</small>`;
+  if(pracVal) pracVal.innerHTML=`${pr}<small> 시간</small>`;
+  const coachBar=document.querySelector('#cardCoaching .bar span');
+  const pracBar=document.querySelector('#cardPractice .bar span');
+  if(coachBar) coachBar.style.width=Math.min(co/4*100,100)+'%';
+  if(pracBar) pracBar.style.width=Math.min(pr/20*100,100)+'%';
 
   const list=document.getElementById('upcomingList');
   list.innerHTML='<div class="empty">불러오는 중…</div>';
@@ -1318,11 +1326,10 @@ async function renderHome(){
 
 /* ---------------- 이용권 확장 패널 ---------------- */
 let openPass=null;
-function togglePass(kind){
+async function togglePass(kind){
   const panel=document.getElementById('passPanel');
   const cCard=document.getElementById('cardCoaching');
   const pCard=document.getElementById('cardPractice');
-  // 같은 카드 다시 누르면 닫기
   if(openPass===kind){
     openPass=null;
     panel.classList.remove('open');
@@ -1337,31 +1344,37 @@ function togglePass(kind){
   document.getElementById('moreCoaching').textContent = kind==='coaching'?'닫기 ▴':'내역 보기 ▾';
   document.getElementById('morePractice').textContent = kind==='practice'?'닫기 ▴':'내역 보기 ▾';
 
-  const d=state.passDetail[kind];
+  const u=state.currentUser;
   const isC=kind==='coaching';
-  const usedRows = d.used.length ? d.used.map(x=>`
-    <div class="pp-row">
-      <span class="pp-dot used"></span>
-      <div class="pp-info"><div class="pp-when">${x.when}</div><div class="pp-meta">${x.meta}</div></div>
-      <div class="pp-amt">${x.amt}</div>
-    </div>`).join('') : '<div class="pp-empty">아직 사용 내역이 없어요.</div>';
-  const activeRows = d.active.length ? d.active.map(x=>`
-    <div class="pp-row">
-      <span class="pp-dot active"></span>
-      <div class="pp-info"><div class="pp-when">${x.when}</div><div class="pp-meta">${x.meta}</div></div>
-      <div class="pp-amt">${x.amt}</div>
-    </div>`).join('') : '<div class="pp-empty">예약 중인 내역이 없어요.</div>';
+  const remain = isC ? (u.coachCount||0) : (u.practiceHours||0);
+  const unit = isC ? '회' : '시간';
+
+  panel.innerHTML='<div class="pp-inner"><div class="pp-empty">불러오는 중…</div></div>';
+  panel.classList.add('open');
+
+  // 실제 예약 내역 (해당 유형)
+  let rows='';
+  try{
+    const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'reservations'));
+    const mine=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(r=> r.userId===u.uid && r.status==='confirmed'
+        && (isC ? r.type==='coaching' : r.type!=='coaching'))
+      .sort((a,b)=>(b.date+b.startTime).localeCompare(a.date+a.startTime));
+    rows = mine.length ? mine.map(r=>`
+      <div class="pp-row">
+        <span class="pp-dot active"></span>
+        <div class="pp-info"><div class="pp-when">${fmtDateLabel(r.date)} ${r.startTime}~${r.endTime}</div><div class="pp-meta">${r.roomName}</div></div>
+      </div>`).join('') : '<div class="pp-empty">예약 내역이 없어요.</div>';
+  }catch(e){ rows='<div class="pp-empty">내역을 불러오지 못했어요.</div>'; }
 
   panel.innerHTML=`
     <div class="pp-inner">
       <div class="pp-head">
         <div class="pp-title">${isC?'🎯 드럼 코칭권':'🥁 연습권'}</div>
-        <div class="pp-remain"><div class="rn">${d.remain}${d.unit==='회'?'회':'h'}</div><div class="rl">잔여 · 총 ${d.total}</div></div>
+        <div class="pp-remain"><div class="rn">${remain}${unit}</div><div class="rl">잔여</div></div>
       </div>
-      <div class="pp-sec">예약 중</div>
-      ${activeRows}
-      <div class="pp-sec">사용 내역</div>
-      ${usedRows}
+      <div class="pp-sec">예약 내역</div>
+      ${rows}
     </div>`;
   panel.classList.add('open');
 }
