@@ -397,6 +397,20 @@ input,select{font-family:inherit;}
 .mc-grant-row{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ivory-dim); margin-bottom:8px; flex-wrap:wrap;}
 .mc-grant-row:last-child{margin-bottom:0;}
 .mc-num{width:56px; background:var(--charcoal-2); border:1px solid var(--line); border-radius:7px; padding:6px 8px; color:var(--ivory); font-size:13px; text-align:center;}
+/* 입금 완료 알리기 */
+.deposit-box{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:14px; padding:16px;}
+.dep-sub{font-size:12px; color:var(--ivory-dim); margin-bottom:6px;}
+.dep-receipt{margin-top:4px;}
+.dep-preview{margin-top:10px;}
+.dep-preview img{width:100%; max-height:220px; object-fit:contain; border-radius:10px; border:1px solid var(--line); background:#000;}
+.dep-preview-actions{display:flex; gap:6px; margin-top:8px;}
+/* 크롭 */
+.crop-area{position:relative; width:100%; max-height:60vh; overflow:hidden; background:#000; border-radius:10px; touch-action:none; user-select:none;}
+.crop-area img{width:100%; display:block; pointer-events:none;}
+.crop-box{position:absolute; border:2px solid var(--gold); box-shadow:0 0 0 9999px rgba(0,0,0,.5); cursor:move;}
+.crop-box::after{content:""; position:absolute; right:-7px; bottom:-7px; width:14px; height:14px; background:var(--gold); border-radius:3px; cursor:nwse-resize;}
+/* 관리자 입금 확인증 */
+.dep-receipt-img{width:100%; max-height:260px; object-fit:contain; border-radius:10px; border:1px solid var(--line); background:#000; margin-bottom:10px; cursor:zoom-in;}
 /* 주간 오늘 헤더 강조 */
 .tl-head.today-head{color:var(--red-soft);}
 .tl-col.week-col:active{background:rgba(255,255,255,.02);}
@@ -657,7 +671,7 @@ input,select{font-family:inherit;}
       <div class="pm-ic">🏦</div>
       <div class="pm-body">
         <div class="pm-title">계좌 이체</div>
-        <div class="pm-detail" id="acctText">국민 123456-78-901234 · 리듬하우스</div>
+        <div class="pm-detail" id="acctText">토스뱅크 1001-9972-1662 · 이현우</div>
       </div>
       <div class="pm-action" id="copyBtn">복사</div>
     </div>
@@ -681,8 +695,45 @@ input,select{font-family:inherit;}
     </a>
 
     <div class="pay-note">
-      💡 송금 후 <b>운영자가 입금을 확인</b>하면 이용권이 자동으로 채워집니다.<br>
+      💡 송금 후 <b>운영자가 입금을 확인</b>하면 이용권이 채워집니다.<br>
       입금자명을 <b>회원 이름</b>으로 해주시면 확인이 빨라요.
+    </div>
+
+    <div class="field-label" style="margin-top:22px;">입금 완료 알리기</div>
+    <div class="deposit-box">
+      <div class="dep-sub">송금하셨다면 아래에 알려주세요. 관리자가 확인 후 이용권을 넣어드려요.</div>
+      <label class="form-label">멤버십 종류 / 메모</label>
+      <input class="form-input" id="depMemo" placeholder="예: 학생 멤버십 1개월">
+      <label class="form-label">입금 금액</label>
+      <input class="form-input" id="depAmount" type="number" placeholder="예: 100000">
+      <label class="form-label">입금 확인증 (선택)</label>
+      <div class="dep-receipt">
+        <input type="file" id="depFile" accept="image/*" style="display:none;" onchange="onDepositFile(event)">
+        <button class="cta cta-ghost" style="margin:0;" onclick="document.getElementById('depFile').click()">📷 이미지 첨부</button>
+        <div id="depPreview" class="dep-preview" style="display:none;">
+          <img id="depPreviewImg" alt="확인증 미리보기">
+          <div class="dep-preview-actions">
+            <button class="mini-btn" onclick="openDepositCrop()">✂️ 자르기</button>
+            <button class="mini-btn danger" onclick="clearDepositFile()">제거</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta cta-primary" style="margin-top:14px;" onclick="submitDeposit()">입금 완료 알리기</button>
+    </div>
+  </div>
+
+  <!-- 확인증 크롭 모달 -->
+  <div id="depCropOverlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card" style="max-width:420px;">
+      <div class="modal-title">확인증 자르기</div>
+      <div class="crop-area" id="cropArea">
+        <img id="cropImg" alt="크롭">
+        <div id="cropBox" class="crop-box"></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <button class="cta cta-ghost" style="flex:1; margin:0;" onclick="closeDepositCrop()">취소</button>
+        <button class="cta cta-primary" style="flex:1;" onclick="applyDepositCrop()">적용</button>
+      </div>
     </div>
   </div>
 
@@ -810,6 +861,7 @@ input,select{font-family:inherit;}
       <button onclick="admTab('rooms',this)">연습실</button>
       <button onclick="admTab('block',this)">예약 차단</button>
       <button onclick="admTab('coaching',this)">코칭 시간</button>
+      <button onclick="admTab('deposits',this)">입금 확인</button>
       <button onclick="admTab('plans',this)">멤버십</button>
       <button onclick="admTab('members',this)">회원·이용권</button>
       <button onclick="admTab('policy',this)">정책</button>
@@ -946,6 +998,11 @@ input,select{font-family:inherit;}
       <div id="admCoachList"></div>
     </div>
 
+    <div id="adm-deposits" class="adm-pane" style="display:none;">
+      <div class="step-sub" style="margin-bottom:12px;">회원이 보낸 입금 완료 신청이에요. 확인 후 회원·이용권 탭에서 이용권을 부여하세요.</div>
+      <div id="admDepositList"></div>
+    </div>
+
     <div id="adm-plans" class="adm-pane" style="display:none;">
       <div class="step-sub" style="margin-bottom:12px;">멤버십 플랜을 추가·수정할 수 있어요. 이용자 결제 화면에 그대로 반영됩니다.</div>
       <div id="admPlanList"></div>
@@ -966,7 +1023,7 @@ input,select{font-family:inherit;}
       <div class="set-row"><span class="k">슬롯당 대기 인원</span><span class="v">2명</span></div>
       <div class="sec-label" style="margin-top:14px;">결제 · 송금 설정</div>
       <div class="set-row"><span class="k">월 회비</span><span class="v">150,000원</span></div>
-      <div class="set-row"><span class="k">입금 계좌</span><span class="v">국민 ···1234</span></div>
+      <div class="set-row"><span class="k">입금 계좌</span><span class="v">토스뱅크 ···1662</span></div>
       <div class="set-row"><span class="k">카카오페이 링크</span><span class="v" onclick="toast('링크 등록 (개발 예정)')">등록 필요</span></div>
       <div class="set-row"><span class="k">토스 링크</span><span class="v" onclick="toast('링크 등록 (개발 예정)')">등록 필요</span></div>
     </div>
@@ -1047,7 +1104,7 @@ let state = {
   // 결제/송금 정보 (운영자가 설정, 지금은 예시값)
   payInfo:{
     amount:'150,000',
-    bank:'국민', account:'123456-78-901234', holder:'리듬하우스',
+    bank:'토스뱅크', account:'1001-9972-1662', holder:'이현우',
     kakaoLink:'', tossLink:'',   // 나중에 발급받은 실제 링크를 넣으면 됨
   },
   reservations:[
@@ -1377,6 +1434,141 @@ async function togglePass(kind){
       ${rows}
     </div>`;
   panel.classList.add('open');
+}
+
+/* ---------------- 입금 완료 알리기 (확인증 압축·크롭) ---------------- */
+let depositImageData = null;  // 압축된 base64 이미지
+
+// 파일 선택 → 압축 → 미리보기
+function onDepositFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    compressImage(ev.target.result, 1200, 0.7, (compressed)=>{
+      depositImageData = compressed;
+      document.getElementById('depPreviewImg').src = compressed;
+      document.getElementById('depPreview').style.display = 'block';
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+// 이미지 압축 (최대 폭 maxW, 품질 quality)
+function compressImage(dataUrl, maxW, quality, cb){
+  const img = new Image();
+  img.onload = ()=>{
+    let w = img.width, h = img.height;
+    if(w > maxW){ h = h * maxW / w; w = maxW; }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.src = dataUrl;
+}
+
+function clearDepositFile(){
+  depositImageData = null;
+  document.getElementById('depPreview').style.display = 'none';
+  document.getElementById('depFile').value = '';
+}
+
+// 크롭 모달
+let cropState = null;
+function openDepositCrop(){
+  if(!depositImageData) return;
+  const overlay = document.getElementById('depCropOverlay');
+  const img = document.getElementById('cropImg');
+  img.src = depositImageData;
+  overlay.style.display = 'flex';
+  img.onload = ()=>{
+    const box = document.getElementById('cropBox');
+    const aw = img.clientWidth, ah = img.clientHeight;
+    // 초기 크롭 박스: 중앙 70%
+    const bw = aw*0.7, bh = ah*0.7;
+    box.style.left = (aw-bw)/2 + 'px';
+    box.style.top = (ah-bh)/2 + 'px';
+    box.style.width = bw + 'px';
+    box.style.height = bh + 'px';
+    attachCropDrag();
+  };
+}
+function closeDepositCrop(){ document.getElementById('depCropOverlay').style.display='none'; }
+
+function attachCropDrag(){
+  const box = document.getElementById('cropBox');
+  const area = document.getElementById('cropArea');
+  let mode=null, sx, sy, sl, st, sw, sh;
+  function pt(e){ const t=e.touches?e.touches[0]:e; return {x:t.clientX, y:t.clientY}; }
+  function start(e){
+    const p=pt(e); const r=box.getBoundingClientRect();
+    // 오른쪽아래 모서리 근처면 리사이즈
+    mode = (p.x > r.right-20 && p.y > r.bottom-20) ? 'resize' : 'move';
+    sx=p.x; sy=p.y; sl=box.offsetLeft; st=box.offsetTop; sw=box.offsetWidth; sh=box.offsetHeight;
+    e.preventDefault();
+  }
+  function move(e){
+    if(!mode) return;
+    const p=pt(e); const dx=p.x-sx, dy=p.y-sy;
+    const aw=area.clientWidth, ah=area.clientHeight;
+    if(mode==='move'){
+      box.style.left=Math.max(0,Math.min(sl+dx, aw-box.offsetWidth))+'px';
+      box.style.top=Math.max(0,Math.min(st+dy, ah-box.offsetHeight))+'px';
+    } else {
+      box.style.width=Math.max(40,Math.min(sw+dx, aw-box.offsetLeft))+'px';
+      box.style.height=Math.max(40,Math.min(sh+dy, ah-box.offsetTop))+'px';
+    }
+    e.preventDefault();
+  }
+  function end(){ mode=null; }
+  box.onmousedown=start; document.onmousemove=move; document.onmouseup=end;
+  box.ontouchstart=start; box.ontouchmove=move; box.ontouchend=end;
+}
+
+function applyDepositCrop(){
+  const img = document.getElementById('cropImg');
+  const box = document.getElementById('cropBox');
+  const scale = img.naturalWidth / img.clientWidth;
+  const sx = box.offsetLeft * scale;
+  const sy = box.offsetTop * scale;
+  const sw = box.offsetWidth * scale;
+  const sh = box.offsetHeight * scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = sw; canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  const src = new Image();
+  src.onload = ()=>{
+    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh);
+    depositImageData = canvas.toDataURL('image/jpeg', 0.75);
+    document.getElementById('depPreviewImg').src = depositImageData;
+    closeDepositCrop();
+  };
+  src.src = depositImageData;
+}
+
+// 입금 완료 신청 → Firestore 저장 (관리자가 확인)
+async function submitDeposit(){
+  const memo = document.getElementById('depMemo').value.trim();
+  const amount = document.getElementById('depAmount').value.trim();
+  if(!amount){ toast('입금 금액을 입력해주세요'); return; }
+  try{
+    await window.RH.addDoc(window.RH.collection(window.RH.db,'deposits'),{
+      userId: state.currentUser.uid,
+      userName: state.currentUser.name,
+      userPhone: state.currentUser.phone || '',
+      memo: memo || '',
+      amount: parseInt(amount)||0,
+      receiptImage: depositImageData || null,
+      status: 'pending',   // pending → confirmed
+      createdAt: window.RH.serverTimestamp()
+    });
+    toast('입금 완료를 알렸어요. 관리자 확인 후 이용권이 채워져요');
+    document.getElementById('depMemo').value='';
+    document.getElementById('depAmount').value='';
+    clearDepositFile();
+  }catch(e){ console.error(e); toast('전송에 실패했어요. 다시 시도해주세요'); }
 }
 
 /* ---------------- 월별 달력 ---------------- */
@@ -1891,6 +2083,62 @@ function admTab(name, el){
   if(name==='schedule') renderSchedule();
   if(name==='block') initBlockTab();
   if(name==='members') renderMembers();
+  if(name==='deposits') renderDeposits();
+}
+
+/* ---------------- 관리자: 입금 확인 (Firebase) ---------------- */
+let depositsCache = [];
+async function renderDeposits(){
+  const wrap=document.getElementById('admDepositList');
+  wrap.innerHTML='<div class="empty">불러오는 중…</div>';
+  try{
+    const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'deposits'));
+    depositsCache=snap.docs.map(d=>({id:d.id, ...d.data()}));
+    depositsCache.sort((a,b)=>{
+      const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
+      const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
+      return tb-ta;
+    });
+  }catch(e){ console.error(e); wrap.innerHTML='<div class="empty">불러오지 못했어요.</div>'; return; }
+
+  if(depositsCache.length===0){ wrap.innerHTML='<div class="empty">입금 신청이 없어요.</div>'; return; }
+  wrap.innerHTML=depositsCache.map(d=>{
+    const when = d.createdAt&&d.createdAt.toDate ? fmtApplied(d.createdAt) : '';
+    const isPending = d.status==='pending';
+    const statusBadge = isPending
+      ? '<span class="badge b-none">확인 대기</span>'
+      : '<span class="badge b-active">확인됨</span>';
+    return `<div class="member-card">
+      <div class="mc-top">
+        <div>
+          <div class="mc-name">${d.userName||'회원'} · ${(d.amount||0).toLocaleString()}원</div>
+          <div class="mc-sub">${d.memo||'메모 없음'}</div>
+          <div class="mc-sub">${d.userPhone||''} · ${when}</div>
+        </div>
+        <div>${statusBadge}</div>
+      </div>
+      ${d.receiptImage ? `<img class="dep-receipt-img" src="${d.receiptImage}" onclick="window.open('${d.receiptImage}')" alt="확인증">` : '<div class="mc-sub" style="padding:6px 0;">첨부된 확인증 없음</div>'}
+      <div class="mc-actions">
+        ${isPending ? `<button class="mini-btn" onclick="confirmDeposit('${d.id}')">확인 처리</button>` : ''}
+        <button class="mini-btn danger" onclick="removeDeposit('${d.id}')">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function confirmDeposit(id){
+  try{
+    await window.RH.updateDoc(window.RH.doc(window.RH.db,'deposits',id),{ status:'confirmed' });
+    toast('확인 처리했어요. 회원·이용권 탭에서 이용권을 부여하세요');
+    renderDeposits();
+  }catch(e){ console.error(e); toast('처리에 실패했어요'); }
+}
+async function removeDeposit(id){
+  if(!confirm('이 입금 신청을 삭제할까요?')) return;
+  try{
+    await window.RH.deleteDoc(window.RH.doc(window.RH.db,'deposits',id));
+    toast('삭제했어요');
+    renderDeposits();
+  }catch(e){ console.error(e); toast('삭제에 실패했어요'); }
 }
 
 /* ---------------- 관리자: 회원 관리 (Firebase) ---------------- */
