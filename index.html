@@ -388,6 +388,15 @@ input,select{font-family:inherit;}
 .badge.b-active{background:rgba(60,179,113,.18); color:#6FCF97;}
 .badge.b-expired{background:rgba(196,52,47,.18); color:var(--red-soft);}
 .badge.b-none{background:var(--charcoal-3); color:var(--ivory-mute);}
+/* 이용권 표시/부여 */
+.mc-pass{display:flex; gap:14px; font-size:13px; padding:8px 10px; background:var(--charcoal-3); border-radius:8px; margin-bottom:10px;}
+.mc-pass b{color:var(--gold-soft);}
+.mc-pass-none{color:var(--ivory-mute); font-size:12px; display:block;}
+.mc-grant{background:var(--charcoal-3); border-radius:8px; padding:10px; margin-bottom:10px;}
+.mc-grant-title{font-size:12px; color:var(--ivory-dim); margin-bottom:8px;}
+.mc-grant-row{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ivory-dim); margin-bottom:8px; flex-wrap:wrap;}
+.mc-grant-row:last-child{margin-bottom:0;}
+.mc-num{width:56px; background:var(--charcoal-2); border:1px solid var(--line); border-radius:7px; padding:6px 8px; color:var(--ivory); font-size:13px; text-align:center;}
 /* 주간 오늘 헤더 강조 */
 .tl-head.today-head{color:var(--red-soft);}
 .tl-col.week-col:active{background:rgba(255,255,255,.02);}
@@ -688,11 +697,11 @@ input,select{font-family:inherit;}
     </div>
 
     <div class="pass-mini" id="passMini">
-      <div class="pm-cell"><div class="pm-l">주간 잔여</div><div class="pm-v rem" id="pmRemain">–</div></div>
+      <div class="pm-cell"><div class="pm-l">남은 이용권</div><div class="pm-v rem" id="pmRemain">–</div></div>
       <div class="pm-div"></div>
-      <div class="pm-cell"><div class="pm-l">이번 주 사용</div><div class="pm-v" id="pmUsed">–</div></div>
+      <div class="pm-cell"><div class="pm-l">단위</div><div class="pm-v" id="pmUsed">–</div></div>
       <div class="pm-div"></div>
-      <div class="pm-cell"><div class="pm-l">주간 한도</div><div class="pm-v" id="pmTotal">–</div></div>
+      <div class="pm-cell"><div class="pm-l">유효기간</div><div class="pm-v" id="pmTotal" style="font-size:13px;">–</div></div>
     </div>
 
     <!-- 연습 예약 영역 -->
@@ -1158,6 +1167,10 @@ window.onFirebaseAuthChanged = async function(user){
         const data = snap.data();
         if(data.role) state.role = data.role;
         if(data.name) state.currentUser.name = data.name;
+        // 이용권 정보 저장
+        state.currentUser.practiceHours = data.practiceHours || 0;
+        state.currentUser.coachCount = data.coachCount || 0;
+        state.currentUser.membershipUntil = data.membershipUntil || null;
       } else {
         // 문서가 없으면(예외 상황) 최소 정보 생성
         await window.RH.setDoc(ref, {
@@ -1265,10 +1278,24 @@ function renderHistory(){
 
 /* ---------------- Home ---------------- */
 async function renderHome(){
-  // 멤버십 상태에 현재 플랜명 반영
-  const myPlan=state.plans.find(p=>p.id===state.myPlan);
+  // 멤버십 상태에 실제 이용권 반영
   const mb=document.getElementById('mbStatus');
-  if(mb && myPlan) mb.innerHTML=`${myPlan.name} · 이용 중`;
+  if(mb){
+    const u=state.currentUser;
+    if(state.role==='admin'){
+      mb.innerHTML='관리자 계정';
+    } else if(!u.membershipUntil){
+      mb.innerHTML='멤버십 미가입 · 열람만 가능';
+    } else {
+      const todayStr=ymd(new Date());
+      const expired = u.membershipUntil < todayStr;
+      if(expired){
+        mb.innerHTML=`만료됨 (${u.membershipUntil}) · 갱신 필요`;
+      } else {
+        mb.innerHTML=`이용 중 · 연습 ${u.practiceHours||0}시간 / 코칭 ${u.coachCount||0}회 · ~${u.membershipUntil}`;
+      }
+    }
+  }
 
   const list=document.getElementById('upcomingList');
   list.innerHTML='<div class="empty">불러오는 중…</div>';
@@ -1368,17 +1395,48 @@ function renderCalendar(){
 }
 
 /* ---------------- Booking ---------------- */
+// 예약 가능 여부 확인 (이용권 + 유효기간)
+function canBook(type){
+  const u = state.currentUser;
+  if(!u) return { ok:false, reason:'로그인이 필요해요' };
+  // 관리자는 항상 가능
+  if(state.role==='admin') return { ok:true };
+  // 멤버십 유효기간 확인
+  const todayStr = ymd(new Date());
+  if(!u.membershipUntil) return { ok:false, reason:'멤버십 가입이 필요해요. 관리자에게 문의해주세요.' };
+  if(u.membershipUntil < todayStr) return { ok:false, reason:`멤버십이 만료되었어요 (${u.membershipUntil}). 갱신 후 이용해주세요.` };
+  // 이용권 잔여 확인
+  if(type==='coaching'){
+    if(!(u.coachCount>0)) return { ok:false, reason:'코칭권이 없어요. 관리자에게 문의해주세요.' };
+  } else {
+    if(!(u.practiceHours>0)) return { ok:false, reason:'연습권이 없어요. 관리자에게 문의해주세요.' };
+  }
+  return { ok:true };
+}
+
 function startBooking(type){
+  // 예약 권한 확인 (이용권 없으면 열람만)
+  const chk = canBook(type);
+  if(!chk.ok){
+    showConfirm({
+      title: '예약할 수 없어요',
+      body: chk.reason + '<br><br>연습실 현황은 자유롭게 둘러보실 수 있어요.',
+      okText: '확인',
+      icon: '🔒'
+    });
+    return;
+  }
+
   state.bookingType=type;
   state.sel={ date:0, room:null, slots:[], coachId:null, coachDur:null };
   document.getElementById('bookTitle').textContent = type==='coaching'?'드럼 코칭 예약':'연습실 예약';
   document.getElementById('bookSub').textContent = type==='coaching'?'열린 코칭 시간에서 선택하세요':'날짜와 연습실을 골라주세요';
 
-  // 이용권 현황 카드 (유형별)
-  const p = type==='coaching' ? state.passes.coaching : state.passes.practice;
-  document.getElementById('pmRemain').textContent = p.remain;
-  document.getElementById('pmUsed').textContent = p.used;
-  document.getElementById('pmTotal').textContent = p.total;
+  // 이용권 현황 카드 (실제 데이터)
+  const remain = type==='coaching' ? (state.currentUser.coachCount||0) : (state.currentUser.practiceHours||0);
+  document.getElementById('pmRemain').textContent = remain;
+  document.getElementById('pmUsed').textContent = type==='coaching'?'회':'시간';
+  document.getElementById('pmTotal').textContent = state.currentUser.membershipUntil ? ('~'+state.currentUser.membershipUntil) : '-';
 
   // 영역 전환
   document.getElementById('practiceArea').style.display = type==='coaching'?'none':'block';
@@ -1855,6 +1913,14 @@ async function renderMembers(){
     }
     const roleBadge = isAdmin ? '<span class="badge b-wait">관리자</span>' : '';
 
+    // 이용권 현황
+    const pr = m.practiceHours;   // 남은 연습 시간
+    const co = m.coachCount;      // 남은 코칭 횟수
+    const hasPass = (typeof pr==='number' && pr>0) || (typeof co==='number' && co>0);
+    const passInfo = hasPass
+      ? `<div class="mc-pass"><span>🥁 연습권 <b>${pr||0}시간</b></span><span>🎯 코칭권 <b>${co||0}회</b></span></div>`
+      : `<div class="mc-pass mc-pass-none">부여된 이용권이 없어요 (열람만 가능)</div>`;
+
     return `<div class="member-card">
       <div class="mc-top">
         <div>
@@ -1864,9 +1930,22 @@ async function renderMembers(){
         </div>
         <div>${memBadge}</div>
       </div>
+      ${passInfo}
+      <div class="mc-grant">
+        <div class="mc-grant-title">이용권 부여 / 조정</div>
+        <div class="mc-grant-row">
+          <label>연습권</label>
+          <input type="number" min="0" class="mc-num" id="mem-pr-${m.uid}" value="${pr||0}"> 시간
+          <label style="margin-left:6px;">코칭권</label>
+          <input type="number" min="0" class="mc-num" id="mem-co-${m.uid}" value="${co||0}"> 회
+        </div>
+        <div class="mc-grant-row">
+          <label>유효기간</label>
+          <input type="date" class="mc-date" id="mem-date-${m.uid}" value="${m.membershipUntil||''}">
+          <button class="mini-btn" onclick="grantMembership('${m.uid}')">저장</button>
+        </div>
+      </div>
       <div class="mc-actions">
-        <input type="date" class="mc-date" id="mem-date-${m.uid}" value="${m.membershipUntil||''}">
-        <button class="mini-btn" onclick="setMembership('${m.uid}')">만료일 저장</button>
         ${isAdmin
           ? `<button class="mini-btn" onclick="setMemberRole('${m.uid}','user')">회원으로</button>`
           : `<button class="mini-btn" onclick="setMemberRole('${m.uid}','admin')">관리자로</button>`}
@@ -1876,12 +1955,16 @@ async function renderMembers(){
   }).join('');
 }
 
-// 멤버십 만료일 저장
-async function setMembership(uid){
-  const val=document.getElementById('mem-date-'+uid).value;
+// 이용권 + 유효기간 한 번에 저장 (부여/조정)
+async function grantMembership(uid){
+  const pr=parseInt(document.getElementById('mem-pr-'+uid).value)||0;
+  const co=parseInt(document.getElementById('mem-co-'+uid).value)||0;
+  const until=document.getElementById('mem-date-'+uid).value;
   try{
-    await window.RH.updateDoc(window.RH.doc(window.RH.db,'users',uid),{ membershipUntil: val||null });
-    toast(val?'멤버십 만료일을 저장했어요':'멤버십을 미설정으로 되돌렸어요');
+    await window.RH.updateDoc(window.RH.doc(window.RH.db,'users',uid),{
+      practiceHours: pr, coachCount: co, membershipUntil: until||null
+    });
+    toast('이용권이 저장되었어요');
     renderMembers();
   }catch(e){ console.error(e); toast('저장에 실패했어요'); }
 }
