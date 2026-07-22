@@ -291,7 +291,8 @@ input,select{font-family:inherit;}
 .set-row .k{font-size:14px;}
 .set-row .v{font-size:13px; background:var(--charcoal-3); padding:5px 12px; border-radius:8px; color:var(--ivory);}
 .dashed-add{border:1px dashed var(--line); border-radius:11px; padding:12px; text-align:center; font-size:13px; color:var(--ivory-mute); margin-top:4px;}
-.role-switch{position:fixed; top:12px; right:12px; z-index:40; background:var(--charcoal-3); border:1px solid var(--line); border-radius:20px; font-size:11px; padding:6px 12px; color:var(--ivory-dim);}
+.role-switch{flex-shrink:0; background:var(--charcoal-3); border:1px solid var(--line); border-radius:20px; font-size:11px; padding:6px 12px; color:var(--ivory-dim); cursor:pointer; white-space:nowrap;}
+.role-switch:hover{border-color:var(--gold); color:var(--ivory);}
 .toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:var(--ivory); color:var(--charcoal); padding:11px 20px; border-radius:24px; font-size:13px; font-weight:500; z-index:60; opacity:0; transition:.25s; pointer-events:none; white-space:nowrap;}
 .toast.show{opacity:1;}
 /* 모달 폼 */
@@ -437,6 +438,24 @@ input,select{font-family:inherit;}
 .cpk-name{font-size:15px; font-weight:600;}
 .cpk-field{font-size:12px; color:var(--gold-soft); margin-top:1px;}
 .cpk-cnt{font-size:11px; color:var(--ivory-mute); margin-top:3px;}
+/* 강사 전용 페이지 */
+.coach-mini-profile{display:flex; align-items:center; gap:12px; background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:12px; padding:12px 14px; margin-bottom:14px;}
+.cmp-photo{width:48px; height:48px; border-radius:50%; overflow:hidden; background:var(--charcoal-3); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:20px;}
+.cmp-photo img{width:100%; height:100%; object-fit:cover;}
+.cmp-name{font-size:15px; font-weight:600;}
+.cmp-field{font-size:12px; color:var(--gold-soft); margin-top:1px;}
+.lesson-card{display:flex; gap:14px; align-items:center; background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
+.lesson-card.open{opacity:.7; border-style:dashed;}
+.lc-time{font-family:'Anton',sans-serif; font-size:18px; text-align:center; color:var(--red-soft); min-width:56px;}
+.lc-time small{font-size:11px; color:var(--ivory-mute);}
+.lc-name{font-size:15px; font-weight:600;}
+.lc-meta{font-size:12px; color:var(--ivory-dim); margin-top:2px;}
+.cw-day{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:10px; padding:10px 12px; margin-bottom:8px;}
+.cw-day.today{border-color:var(--red-soft);}
+.cw-dayhead{font-size:13px; font-weight:600; margin-bottom:6px;}
+.cw-day.today .cw-dayhead{color:var(--red-soft);}
+.cw-empty{font-size:12px; color:var(--ivory-mute);}
+.cw-lesson{font-size:13px; padding:5px 0; border-top:1px solid var(--line-soft);}
 /* 주간 오늘 헤더 강조 */
 .tl-head.today-head{color:var(--red-soft);}
 .tl-col.week-col:active{background:rgba(255,255,255,.02);}
@@ -542,11 +561,6 @@ input,select{font-family:inherit;}
   .app.admin-wide{ max-width:1040px; }
   .app.admin-wide .botnav{ max-width:1040px; }
 }
-/* 관리자 전환 버튼: 큰 화면에선 살짝 안쪽으로 */
-@media (min-width: 620px){
-  .role-switch{ top:36px; right:calc(50% - 214px); }
-  .admin-wide ~ .role-switch, .app.admin-wide .role-switch{ right:36px; }
-}
 </style>
 <!-- Firebase SDK -->
 <script type="module">
@@ -625,8 +639,6 @@ input,select{font-family:inherit;}
 
 <!-- ================= MAIN APP ================= -->
 <div id="appView" class="app" style="display:none;">
-  <button class="role-switch" onclick="toggleRole()" id="roleBtn" style="display:none;">👤 이용자 화면</button>
-
   <div class="topbar">
     <img id="topLogo" class="top-logo" alt="Rhythm House">
     <div>
@@ -634,6 +646,7 @@ input,select{font-family:inherit;}
       <div class="brand-sub">PRACTICE STUDIO</div>
     </div>
     <div class="spacer"></div>
+    <button class="role-switch" onclick="toggleRole()" id="roleBtn" style="display:none;">👤 이용자</button>
     <div class="chip" id="topChip" onclick="confirmLogout()" style="cursor:pointer;">회원님</div>
   </div>
 
@@ -881,6 +894,20 @@ input,select{font-family:inherit;}
   </div>
 
   <!-- ===== ADMIN ===== -->
+  <div id="s-coach" class="screen">
+    <div class="step-title" style="margin-bottom:14px;">내 레슨 관리</div>
+
+    <div class="coach-mini-profile" id="coachMiniProfile"></div>
+
+    <div class="sched-viewtabs" id="coachViewTabs">
+      <button class="on" onclick="setCoachView('today',this)">오늘</button>
+      <button onclick="setCoachView('week',this)">이번 주</button>
+      <button onclick="setCoachView('open',this)">시간 열기</button>
+    </div>
+
+    <div id="coachViewBody"></div>
+  </div>
+
   <div id="s-admin" class="screen">
     <div class="step-title" style="margin-bottom:16px;">관리자</div>
     <div class="tabbar" id="admTabs">
@@ -930,8 +957,31 @@ input,select{font-family:inherit;}
         <button class="cal-nav" onclick="schedMove(1)">›</button>
       </div>
       <div class="sched-today-btn" onclick="schedToday()">오늘로</div>
+      <button class="cta cta-primary" style="margin:0 0 12px; padding:10px;" onclick="openAdminResForm()">＋ 예약 직접 추가</button>
       <div id="roomLegend" class="room-legend"></div>
       <div id="schedTimeline"></div>
+    </div>
+
+    <!-- 관리자 예약 직접 추가 폼 -->
+    <div id="admResOverlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeAdminResForm()">
+      <div class="modal-card">
+        <div class="modal-title">예약 직접 추가</div>
+        <label class="form-label">회원 선택</label>
+        <select class="form-input" id="arMember"></select>
+        <label class="form-label">연습실</label>
+        <select class="form-input" id="arRoom"></select>
+        <label class="form-label">날짜</label>
+        <input class="form-input" id="arDate" type="date">
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1;"><label class="form-label">시작</label><input class="form-input" id="arStart" type="time" value="18:00"></div>
+          <div style="flex:1;"><label class="form-label">종료</label><input class="form-input" id="arEnd" type="time" value="19:00"></div>
+        </div>
+        <label class="form-check"><input type="checkbox" id="arNoCharge" checked> 이용권 차감 안 함 (관리자 수동 추가)</label>
+        <div style="display:flex; gap:8px; margin-top:16px;">
+          <button class="cta cta-ghost" style="flex:1; margin:0;" onclick="closeAdminResForm()">취소</button>
+          <button class="cta cta-primary" style="flex:1;" onclick="saveAdminRes()">추가</button>
+        </div>
+      </div>
     </div>
 
     <div id="adm-rooms" class="adm-pane" style="display:none;">
@@ -1135,6 +1185,7 @@ input,select{font-family:inherit;}
     <button class="on" data-s="home" onclick="go('home')"><span class="ic">🏠</span>홈</button>
     <button data-s="mine" onclick="go('mine')"><span class="ic">📋</span>내 예약</button>
     <button data-s="stats" onclick="go('stats')"><span class="ic">📊</span>통계</button>
+    <button data-s="coach" onclick="go('coach')" id="navCoach" style="display:none;"><span class="ic">🥁</span>내 레슨</button>
     <button data-s="admin" onclick="go('admin')" id="navAdmin" style="display:none;"><span class="ic">⚙️</span>관리</button>
   </div>
 </div>
@@ -1380,6 +1431,13 @@ async function enterApp(){
     roleBtn.style.display = 'none';
     document.getElementById('navAdmin').style.display = 'none';
   }
+  // 강사(coach)에게 내 레슨 탭 노출
+  const navCoach = document.getElementById('navCoach');
+  if(state.role === 'coach'){
+    navCoach.style.display = 'flex';
+  } else {
+    navCoach.style.display = 'none';
+  }
   state.viewMode = 'user';
 
   // 연습실 목록 로드 (예약 화면에서 사용)
@@ -1427,6 +1485,7 @@ function go(screen){
   if(screen==='stats') renderHistory();
   if(screen==='pay') renderPlans();
   if(screen==='admin') renderAdmDash();
+  if(screen==='coach') renderCoachPage();
   window.scrollTo(0,0);
 }
 
@@ -2314,6 +2373,144 @@ async function initCoachMgr(){
   await renderCoachMgr();
 }
 
+/* ---------------- 강사 전용 페이지 ---------------- */
+let coachView = 'today';
+let myCoachInfo = null;
+function setCoachView(v, el){
+  coachView = v;
+  document.querySelectorAll('#coachViewTabs button').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  renderCoachPage();
+}
+
+async function renderCoachPage(){
+  const body=document.getElementById('coachViewBody');
+  const prof=document.getElementById('coachMiniProfile');
+  body.innerHTML='<div class="empty">불러오는 중…</div>';
+
+  // 내 강사 정보 로드
+  const coachId = state.currentUser.coachId;
+  if(!coachId){ prof.innerHTML=''; body.innerHTML='<div class="empty">강사 정보가 연결되지 않았어요. 관리자에게 문의해주세요.</div>'; return; }
+  await loadCoaches();
+  myCoachInfo = coachesCache.find(c=>c.id===coachId);
+  if(myCoachInfo){
+    prof.innerHTML=`
+      <div class="cmp-photo">${myCoachInfo.photo?`<img src="${myCoachInfo.photo}">`:'🥁'}</div>
+      <div><div class="cmp-name">${myCoachInfo.name} 강사</div><div class="cmp-field">${myCoachInfo.field||''}</div></div>`;
+  }
+
+  await loadCoachSlots();
+  await loadAllReservations();
+
+  if(coachView==='today') renderCoachToday(body);
+  else if(coachView==='week') renderCoachWeek(body);
+  else if(coachView==='open') renderCoachOpen(body);
+}
+
+// 오늘 내 레슨
+function renderCoachToday(body){
+  const coachId=state.currentUser.coachId;
+  const todayStr=ymd(new Date());
+  // 내 코칭으로 예약된 레슨 (reservations에 coachId 기록됨)
+  const lessons=allReservationsCache.filter(r=> r.coachId===coachId && r.date===todayStr && r.status==='confirmed')
+    .sort((a,b)=>a.startTime.localeCompare(b.startTime));
+  let html=`<div class="sec-label">오늘 (${fmtDateLabel(todayStr)}) 레슨</div>`;
+  if(lessons.length===0){ html+='<div class="empty">오늘 잡힌 레슨이 없어요.</div>'; }
+  else html+=lessons.map(r=>`
+    <div class="lesson-card">
+      <div class="lc-time">${r.startTime}<br><small>~${r.endTime}</small></div>
+      <div class="lc-info"><div class="lc-name">${r.userName||'회원'}</div><div class="lc-meta">${r.roomName} · ${r.durationMin||30}분</div></div>
+    </div>`).join('');
+  // 열어둔 미신청 슬롯도
+  const openSlots=coachSlotsCache.filter(c=>c.coachId===coachId && c.date===todayStr && !c.booked);
+  if(openSlots.length){
+    html+=`<div class="sec-label" style="margin-top:16px;">오늘 열어둔 빈 시간</div>`;
+    html+=openSlots.sort((a,b)=>a.startTime.localeCompare(b.startTime)).map(c=>`
+      <div class="lesson-card open"><div class="lc-time">${c.startTime}</div><div class="lc-info"><div class="lc-meta">${c.roomName} · ${c.durationMin}분 · 신청 대기</div></div></div>`).join('');
+  }
+  body.innerHTML=html;
+}
+
+// 이번 주 내 레슨
+function renderCoachWeek(body){
+  const coachId=state.currentUser.coachId;
+  const dows=['일','월','화','수','목','금','토'];
+  const start=new Date(); start.setDate(start.getDate()-start.getDay());
+  let html=`<div class="sec-label">이번 주 레슨</div>`;
+  for(let i=0;i<7;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i); const ds=ymd(d);
+    const lessons=allReservationsCache.filter(r=> r.coachId===coachId && r.date===ds && r.status==='confirmed').sort((a,b)=>a.startTime.localeCompare(b.startTime));
+    const isToday=ds===ymd(new Date());
+    html+=`<div class="cw-day ${isToday?'today':''}"><div class="cw-dayhead">${dows[d.getDay()]} ${d.getMonth()+1}/${d.getDate()}</div>`;
+    if(lessons.length===0) html+='<div class="cw-empty">레슨 없음</div>';
+    else lessons.forEach(r=>{ html+=`<div class="cw-lesson">${r.startTime}~${r.endTime} · ${r.userName||'회원'} · ${r.roomName}</div>`; });
+    html+='</div>';
+  }
+  body.innerHTML=html;
+}
+
+// 시간 열기 (강사 본인)
+async function renderCoachOpen(body){
+  if(rooms.length===0) await loadRooms();
+  const roomOpts=rooms.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  body.innerHTML=`
+    <div class="sec-label">코칭 시간 열기</div>
+    <div class="step-sub" style="margin-bottom:10px;">회원이 신청할 수 있는 내 코칭 시간을 열어요.</div>
+    <label class="form-label">연습실</label>
+    <select class="form-input" id="coRoom">${roomOpts}</select>
+    <label class="form-label">날짜</label>
+    <input class="form-input" id="coDate" type="date" value="${ymd(new Date())}">
+    <div style="display:flex; gap:8px;">
+      <div style="flex:1;"><label class="form-label">시작</label><input class="form-input" id="coStart" type="time" value="15:00"></div>
+      <div style="flex:1;"><label class="form-label">길이</label><select class="form-input" id="coDur"><option value="30">30분</option><option value="60">60분</option></select></div>
+    </div>
+    <button class="cta cta-primary" style="margin-top:14px;" onclick="coachOpenSlot()">＋ 코칭 시간 열기</button>
+    <div class="sec-label" style="margin-top:22px;">내가 연 코칭 시간</div>
+    <div id="coachOpenList"></div>`;
+  renderCoachOpenList();
+}
+async function renderCoachOpenList(){
+  const wrap=document.getElementById('coachOpenList');
+  if(!wrap) return;
+  const coachId=state.currentUser.coachId;
+  await loadCoachSlots();
+  const mine=coachSlotsCache.filter(c=>c.coachId===coachId).sort((a,b)=>(a.date+a.startTime).localeCompare(b.date+b.startTime));
+  if(mine.length===0){ wrap.innerHTML='<div class="empty">아직 연 시간이 없어요.</div>'; return; }
+  wrap.innerHTML=mine.map(c=>`
+    <div class="adm-item">
+      <div style="flex:1;"><div class="t">${fmtDateLabel(c.date)} ${c.startTime}~${c.endTime}</div>
+      <div class="s">${c.roomName} · ${c.durationMin}분 · ${c.booked?`<span style="color:var(--gold-soft)">${c.bookedByName} 신청</span>`:'대기중'}</div></div>
+      <button class="mini-btn danger" style="flex:0; padding:6px 10px;" onclick="removeCoachSlot('${c.id}'); setTimeout(renderCoachOpenList,400);">삭제</button>
+    </div>`).join('');
+}
+async function coachOpenSlot(){
+  const roomId=document.getElementById('coRoom').value;
+  const dateStr=document.getElementById('coDate').value;
+  const start=document.getElementById('coStart').value;
+  const durMin=parseInt(document.getElementById('coDur').value);
+  const room=rooms.find(r=>r.id===roomId);
+  if(!roomId||!dateStr||!start){ toast('연습실·날짜·시간을 확인해주세요'); return; }
+  const [sh,sm]=start.split(':').map(Number);
+  const endM=sh*60+sm+durMin;
+  const end=`${String(Math.floor(endM/60)).padStart(2,'0')}:${String(endM%60).padStart(2,'0')}`;
+  try{
+    await loadAllReservations(); await loadCoachSlots();
+    const slotList=[]; for(let t=sh*60+sm;t<endM;t+=30) slotList.push(`${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
+    const conflictRes=allReservationsCache.some(r=> r.roomId===roomId && r.date===dateStr && (r.slots||[]).some(s=>slotList.includes(s)));
+    const conflictCch=coachSlotsCache.some(c=> c.roomId===roomId && c.date===dateStr && !(end<=c.startTime || start>=c.endTime));
+    if(conflictRes||conflictCch){ toast('그 시간에 이미 예약/코칭이 있어요'); return; }
+    await window.RH.addDoc(window.RH.collection(window.RH.db,'coachingSlots'),{
+      roomId, roomName:room.name, date:dateStr,
+      coachId: state.currentUser.coachId, coachName: myCoachInfo?myCoachInfo.name:state.currentUser.name,
+      startTime:start, endTime:end, durationMin:durMin, slots:slotList,
+      booked:false, bookedBy:null, bookedByName:null,
+      createdAt: window.RH.serverTimestamp()
+    });
+    toast('코칭 시간을 열었어요');
+    renderCoachOpenList();
+  }catch(e){ console.error(e); toast('저장에 실패했어요'); }
+}
+
 async function loadCoaches(){
   const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'coaches'));
   coachesCache=snap.docs.map(d=>({id:d.id, ...d.data()}));
@@ -3027,9 +3224,70 @@ async function renderSchedule(){
   }catch(e){ console.error(e); wrap.innerHTML='<div class="tl-empty-msg">불러오지 못했어요.</div>'; }
 }
 
+/* ---------------- 관리자 예약 직접 추가/취소 ---------------- */
+async function openAdminResForm(){
+  if(rooms.length===0) await loadRooms();
+  document.getElementById('arRoom').innerHTML=rooms.filter(r=>r.active).map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  // 회원 목록
+  try{
+    const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'users'));
+    const users=snap.docs.map(d=>({uid:d.id,...d.data()}));
+    document.getElementById('arMember').innerHTML=users.map(u=>`<option value="${u.uid}|${(u.name||'회원').replace(/\|/g,'')}">${u.name||'이름없음'} (${u.loginId||'-'})</option>`).join('');
+  }catch(e){ console.error(e); }
+  document.getElementById('arDate').value = ymd(schedDate);
+  document.getElementById('admResOverlay').style.display='flex';
+}
+function closeAdminResForm(){ document.getElementById('admResOverlay').style.display='none'; }
+
+async function saveAdminRes(){
+  const memberVal=document.getElementById('arMember').value;
+  const roomId=document.getElementById('arRoom').value;
+  const dateStr=document.getElementById('arDate').value;
+  const start=document.getElementById('arStart').value;
+  const end=document.getElementById('arEnd').value;
+  const noCharge=document.getElementById('arNoCharge').checked;
+  if(!memberVal||!roomId||!dateStr||!start||!end){ toast('모든 항목을 확인해주세요'); return; }
+  if(start>=end){ toast('종료가 시작보다 늦어야 해요'); return; }
+  const [uid, uname]=memberVal.split('|');
+  const room=rooms.find(r=>r.id===roomId);
+  // 슬롯 계산
+  const [sh,sm]=start.split(':').map(Number); const [eh,em]=end.split(':').map(Number);
+  const slots=[]; for(let t=sh*60+sm; t<eh*60+em; t+=30) slots.push(`${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`);
+  try{
+    await loadAllReservations();
+    const conflict=allReservationsCache.some(r=> r.roomId===roomId && r.date===dateStr && (r.slots||[]).some(s=>slots.includes(s)));
+    if(conflict){ toast('그 시간에 이미 예약이 있어요'); return; }
+    await window.RH.addDoc(window.RH.collection(window.RH.db,'reservations'),{
+      roomId, roomName:room.name, userId:uid, userName:uname,
+      type:'practice', date:dateStr, startTime:start, endTime:end, slots,
+      chargeHours: noCharge?0:slots.length*0.5,
+      status:'confirmed', addedByAdmin:true,
+      createdAt: window.RH.serverTimestamp()
+    });
+    toast('예약이 추가되었어요');
+    closeAdminResForm();
+    renderSchedule();
+  }catch(e){ console.error(e); toast('추가에 실패했어요'); }
+}
+
+// 관리자 예약 취소 (예약 현황에서)
+async function adminCancelRes(id, label){
+  if(!confirm(`이 예약을 취소할까요?\n${label}`)) return;
+  try{
+    await window.RH.updateDoc(window.RH.doc(window.RH.db,'reservations',id),{ status:'cancelled' });
+    // 코칭이면 슬롯 다시 열기
+    const snap=await window.RH.getDoc(window.RH.doc(window.RH.db,'reservations',id));
+    const r=snap.exists()?snap.data():null;
+    if(r && r.type==='coaching' && r.coachSlotId){
+      try{ await window.RH.updateDoc(window.RH.doc(window.RH.db,'coachingSlots',r.coachSlotId),{ booked:false, bookedBy:null, bookedByName:null }); }catch(e){}
+    }
+    toast('예약이 취소되었어요');
+    renderSchedule();
+  }catch(e){ console.error(e); toast('취소에 실패했어요'); }
+}
+
 // 룸 색상 범례
-function renderRoomLegend(){
-  const el=document.getElementById('roomLegend');
+function renderRoomLegend(){  const el=document.getElementById('roomLegend');
   if(!el) return;
   const activeRooms=rooms.filter(r=>r.active);
   if(activeRooms.length===0){ el.innerHTML=''; return; }
@@ -3065,6 +3323,9 @@ function renderSchedDay(wrap){
     block.style.height=(((endMin-startMin)/30)*26 - 4)+'px';
     block.style.borderLeft='3px solid '+roomColorOf(r.roomId);
     block.innerHTML=`<div class="bk-name">${r.userName||'회원'}</div>${r.startTime}`;
+    block.style.cursor='pointer';
+    block.title='클릭하여 예약 취소';
+    block.addEventListener('click',()=>{ adminCancelRes(r.id, `${r.userName||'회원'} · ${r.roomName} ${r.startTime}~${r.endTime}`); });
     col.style.position='relative'; col.appendChild(block);
   });
   if(dayRes.length===0) wrap.insertAdjacentHTML('beforeend','<div style="text-align:center; color:var(--ivory-mute); font-size:12px; margin-top:12px;">이 날은 예약이 없어요</div>');
