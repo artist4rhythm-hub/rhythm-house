@@ -398,6 +398,11 @@ input,select{font-family:inherit;}
 .mc-grant-row{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ivory-dim); margin-bottom:8px; flex-wrap:wrap;}
 .mc-grant-row:last-child{margin-bottom:0;}
 .mc-num{width:56px; background:var(--charcoal-2); border:1px solid var(--line); border-radius:7px; padding:6px 8px; color:var(--ivory); font-size:13px; text-align:center;}
+/* 이용권 빠른 입력 프리셋 */
+.mc-preset{display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:8px;}
+.preset-label{font-size:11px; color:var(--ivory-mute); margin-right:2px;}
+.preset-btn{font-size:11px; padding:5px 9px; border-radius:7px; border:1px solid var(--line); background:var(--charcoal-2); color:var(--ivory-dim); cursor:pointer;}
+.preset-btn:hover{border-color:var(--gold); color:var(--ivory);}
 /* 입금 완료 알리기 */
 .deposit-box{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:14px; padding:16px;}
 .dep-sub{font-size:12px; color:var(--ivory-dim); margin-bottom:6px;}
@@ -1380,6 +1385,8 @@ window.onFirebaseAuthChanged = async function(user){
         state.currentUser.practiceHours = data.practiceHours || 0;
         state.currentUser.coachCount = data.coachCount || 0;
         state.currentUser.membershipUntil = data.membershipUntil || null;
+        state.currentUser.loginId = data.loginId || '';
+        state.currentUser.phone = data.phone || '';
         state.currentUser.coachId = data.coachId || null;
         // 강사면 예약 권한 확인
         if(data.role==='coach' && data.coachId){
@@ -1729,6 +1736,7 @@ async function submitDeposit(){
     await window.RH.addDoc(window.RH.collection(window.RH.db,'deposits'),{
       userId: state.currentUser.uid,
       userName: state.currentUser.name,
+      userLoginId: state.currentUser.loginId || '',
       userPhone: state.currentUser.phone || '',
       memo: memo || '',
       amount: parseInt(amount)||0,
@@ -2756,8 +2764,9 @@ async function renderDeposits(){
       <div class="mc-top">
         <div>
           <div class="mc-name">${d.userName||'회원'} · ${(d.amount||0).toLocaleString()}원</div>
+          <div class="mc-sub">아이디 ${d.userLoginId||'-'} · ${d.userPhone||'연락처 없음'}</div>
           <div class="mc-sub">${d.memo||'메모 없음'}</div>
-          <div class="mc-sub">${d.userPhone||''} · ${when}</div>
+          <div class="mc-sub">${when}</div>
         </div>
         <div>${statusBadge}</div>
       </div>
@@ -2838,11 +2847,22 @@ async function renderMembers(){
       ${passInfo}
       <div class="mc-grant">
         <div class="mc-grant-title">이용권 부여 / 조정</div>
+        <div class="mc-preset">
+          <span class="preset-label">플랜 빠른 입력:</span>
+          <button class="preset-btn" onclick="applyPlanPreset('${m.uid}',20,4)">학생 (연습20·코칭4)</button>
+          <button class="preset-btn" onclick="applyPlanPreset('${m.uid}',20,4)">대학생+ (연습20·코칭4)</button>
+        </div>
         <div class="mc-grant-row">
           <label>연습권</label>
           <input type="number" min="0" class="mc-num" id="mem-pr-${m.uid}" value="${pr||0}"> 시간
           <label style="margin-left:6px;">코칭권</label>
           <input type="number" min="0" class="mc-num" id="mem-co-${m.uid}" value="${co||0}"> 회
+        </div>
+        <div class="mc-preset">
+          <span class="preset-label">유효기간 빠른 설정:</span>
+          <button class="preset-btn" onclick="applyDatePreset('${m.uid}',1)">+1개월</button>
+          <button class="preset-btn" onclick="applyDatePreset('${m.uid}',2)">+2개월</button>
+          <button class="preset-btn" onclick="applyDatePreset('${m.uid}',3)">+3개월</button>
         </div>
         <div class="mc-grant-row">
           <label>유효기간</label>
@@ -2858,6 +2878,20 @@ async function renderMembers(){
       </div>
     </div>`;
   }).join('');
+}
+
+// 플랜 프리셋: 연습권·코칭권 자동 입력
+function applyPlanPreset(uid, hours, coach){
+  document.getElementById('mem-pr-'+uid).value = hours;
+  document.getElementById('mem-co-'+uid).value = coach;
+  toast('입력됨 · 저장을 눌러 적용하세요');
+}
+// 기간 프리셋: 오늘부터 N개월 뒤로 유효기간 자동 설정
+function applyDatePreset(uid, months){
+  const d=new Date();
+  d.setMonth(d.getMonth()+months);
+  document.getElementById('mem-date-'+uid).value = ymd(d);
+  toast(`유효기간 ${ymd(d)} · 저장을 눌러 적용하세요`);
 }
 
 // 이용권 + 유효기간 한 번에 저장 (부여/조정)
