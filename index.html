@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>리듬 하우스 · 연습실 예약</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E0D0C">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<!-- iOS 홈화면 지원 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="리듬 하우스">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -403,6 +412,29 @@ input,select{font-family:inherit;}
 .preset-label{font-size:11px; color:var(--ivory-mute); margin-right:2px;}
 .preset-btn{font-size:11px; padding:5px 9px; border-radius:7px; border:1px solid var(--line); background:var(--charcoal-2); color:var(--ivory-dim); cursor:pointer;}
 .preset-btn:hover{border-color:var(--gold); color:var(--ivory);}
+/* 회원 멤버십 소개 카드 */
+.plan-card{background:var(--charcoal-2); border:1.5px solid var(--line); border-radius:14px; padding:16px; margin-bottom:10px; cursor:pointer; transition:.12s;}
+.plan-card.on{border-color:var(--gold); background:rgba(217,164,65,.06);}
+.plan-card-head{display:flex; justify-content:space-between; align-items:baseline;}
+.pc-name{font-size:16px; font-weight:700;}
+.pc-price{font-family:'Anton',sans-serif; font-size:22px; color:var(--gold-soft);}
+.pc-price small{font-family:'Noto Sans KR',sans-serif; font-size:11px; color:var(--ivory-mute); font-weight:400; margin-left:2px;}
+.pc-includes{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+.pc-inc{font-size:12px; background:var(--charcoal-3); border-radius:8px; padding:5px 10px; color:var(--ivory-dim);}
+.pc-desc{font-size:12px; color:var(--ivory-mute); margin-top:8px;}
+.pc-check{margin-top:10px; text-align:center; font-size:12px; font-weight:600; padding:7px; border-radius:8px; background:var(--charcoal-3); color:var(--ivory-dim);}
+.plan-card.on .pc-check{background:var(--gold); color:#1A1817;}
+/* 관리자 플랜 카드 */
+.plan-admin-card{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:12px; padding:14px; margin-bottom:10px;}
+.plan-admin-card.archived{opacity:.55;}
+.pac-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+.pac-name{font-size:15px; font-weight:600;}
+.pac-arch{font-size:10px; background:var(--charcoal-3); color:var(--ivory-mute); border-radius:5px; padding:2px 6px; margin-left:4px;}
+.pac-detail{font-size:12px; color:var(--ivory-dim); margin-top:3px;}
+.pac-desc{font-size:11px; color:var(--ivory-mute); margin-top:3px;}
+.pac-price{font-family:'Anton',sans-serif; font-size:18px; color:var(--gold-soft); white-space:nowrap;}
+.pac-price small{font-family:'Noto Sans KR',sans-serif; font-size:10px; color:var(--ivory-mute); font-weight:400;}
+.pac-btns{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line-soft);}
 /* 입금 완료 알리기 */
 .deposit-box{background:var(--charcoal-2); border:1px solid var(--line-soft); border-radius:14px; padding:16px;}
 .dep-sub{font-size:12px; color:var(--ivory-dim); margin-bottom:6px;}
@@ -1160,9 +1192,31 @@ input,select{font-family:inherit;}
     </div>
 
     <div id="adm-plans" class="adm-pane" style="display:none;">
-      <div class="step-sub" style="margin-bottom:12px;">멤버십 플랜을 추가·수정할 수 있어요. 이용자 결제 화면에 그대로 반영됩니다.</div>
+      <div class="step-sub" style="margin-bottom:12px;">멤버십을 추가·수정·보관할 수 있어요. 활성 멤버십은 회원의 결제 화면에 소개 카드로 표시됩니다.</div>
       <div id="admPlanList"></div>
-      <div class="dashed-add" onclick="toast('플랜 추가 (개발 예정)')">＋ 멤버십 플랜 추가</div>
+    </div>
+
+    <!-- 멤버십 플랜 추가/수정 폼 -->
+    <div id="planFormOverlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closePlanForm()">
+      <div class="modal-card">
+        <div class="modal-title" id="planFormTitle">멤버십 추가</div>
+        <label class="form-label">멤버십 이름</label>
+        <input class="form-input" id="pfName" placeholder="예: 학생 멤버십">
+        <label class="form-label">가격 (원/월)</label>
+        <input class="form-input" id="pfPrice" type="number" placeholder="예: 100000">
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1;"><label class="form-label">연습권 (시간)</label><input class="form-input" id="pfHours" type="number" placeholder="20"></div>
+          <div style="flex:1;"><label class="form-label">코칭권 (회)</label><input class="form-input" id="pfCoach" type="number" placeholder="4"></div>
+        </div>
+        <label class="form-label">코칭 회당 시간 (분, 선택)</label>
+        <input class="form-input" id="pfCoachMin" type="number" placeholder="예: 30">
+        <label class="form-label">설명 (선택)</label>
+        <input class="form-input" id="pfDesc" placeholder="예: 학생 대상 · 평일 이용">
+        <div style="display:flex; gap:8px; margin-top:16px;">
+          <button class="cta cta-ghost" style="flex:1; margin:0;" onclick="closePlanForm()">취소</button>
+          <button class="cta cta-primary" style="flex:1;" onclick="savePlan()">저장</button>
+        </div>
+      </div>
     </div>
 
     <div id="adm-members" class="adm-pane" style="display:none;">
@@ -1493,6 +1547,7 @@ function go(screen){
   if(screen==='pay') renderPlans();
   if(screen==='admin') renderAdmDash();
   if(screen==='coach') renderCoachPage();
+  if(screen==='pay') renderPlanCards();
   window.scrollTo(0,0);
 }
 
@@ -1613,6 +1668,48 @@ async function togglePass(kind){
       ${rows}
     </div>`;
   panel.classList.add('open');
+}
+
+/* ---------------- 회원: 멤버십 소개 카드 ---------------- */
+let selectedPlanId = null;
+async function renderPlanCards(){
+  const wrap=document.getElementById('planList');
+  if(!wrap) return;
+  wrap.innerHTML='<div class="empty">불러오는 중…</div>';
+  await loadPlans();
+  const active=plansCache.filter(p=>p.active!==false);
+  if(active.length===0){
+    wrap.innerHTML='<div class="empty">현재 안내 중인 멤버십이 없어요. 관리자에게 문의해주세요.</div>';
+    document.getElementById('payAmount').innerHTML='—';
+    document.getElementById('payDesc').textContent='';
+    return;
+  }
+  if(!selectedPlanId || !active.find(p=>p.id===selectedPlanId)) selectedPlanId=active[0].id;
+  wrap.innerHTML=active.map(p=>`
+    <div class="plan-card ${selectedPlanId===p.id?'on':''}" onclick="selectPlan('${p.id}')">
+      <div class="plan-card-head">
+        <div class="pc-name">${p.name}</div>
+        <div class="pc-price">${fmtWon(p.price||0)}<small>원/월</small></div>
+      </div>
+      <div class="pc-includes">
+        <span class="pc-inc">🥁 연습 ${p.practiceHours||0}시간</span>
+        <span class="pc-inc">🎯 코칭 ${p.coachCount||0}회${p.coachMin?` · ${p.coachMin}분`:''}</span>
+      </div>
+      ${p.desc?`<div class="pc-desc">${p.desc}</div>`:''}
+      <div class="pc-check">${selectedPlanId===p.id?'✓ 선택됨':'선택'}</div>
+    </div>`).join('');
+  updatePlanAmount();
+}
+function selectPlan(id){ selectedPlanId=id; renderPlanCards(); }
+function updatePlanAmount(){
+  const p=plansCache.find(x=>x.id===selectedPlanId);
+  if(!p) return;
+  document.getElementById('payAmount').innerHTML=`${(p.price||0).toLocaleString()}<span>원</span>`;
+  document.getElementById('payDesc').textContent=`연습 ${p.practiceHours||0}시간 + 코칭 ${p.coachCount||0}회${p.coachMin?` (회당 ${p.coachMin}분)`:''}`;
+  const memo=document.getElementById('depMemo');
+  if(memo && !memo.value) memo.value=p.name;
+  const amt=document.getElementById('depAmount');
+  if(amt && !amt.value) amt.value=p.price||'';
 }
 
 /* ---------------- 입금 완료 알리기 (확인증 압축·크롭) ---------------- */
@@ -3696,20 +3793,102 @@ async function removeRoom(id, name){
     toast('삭제에 실패했어요');
   }
 }
-function renderAdmPlans(){
+/* ---------------- 멤버십 플랜 관리 (Firebase) ---------------- */
+let plansCache = [];
+let editingPlanId = null;
+
+async function renderAdmPlans(){
   const wrap=document.getElementById('admPlanList');
-  wrap.innerHTML=state.plans.map(p=>`
-    <div class="adm-item" style="flex-direction:column; align-items:stretch; gap:8px;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div class="t">${p.name}</div>
-        <div style="font-family:'Anton',sans-serif; font-size:18px; color:var(--gold-soft);">${fmtWon(p.price)}<span style="font-family:'Noto Sans KR'; font-size:11px; color:var(--ivory-mute); font-weight:400;">원</span></div>
-      </div>
-      <div class="s">코칭 ${p.coachCount}회 (회당 ${p.coachMin}분) · 연습 ${p.practiceHours}시간</div>
-      <div style="display:flex; gap:6px; margin-top:4px;">
-        <button class="mini-btn" onclick="toast('플랜 수정 (개발 예정)')">수정</button>
-        <button class="mini-btn danger" onclick="toast('플랜 삭제 (개발 예정)')">삭제</button>
-      </div>
-    </div>`).join('');
+  wrap.innerHTML='<div class="empty">불러오는 중…</div>';
+  await loadPlans();
+  let html = plansCache.length===0
+    ? '<div class="empty">등록된 멤버십이 없어요. 아래 버튼으로 추가하세요.</div>'
+    : plansCache.map(p=>`
+      <div class="plan-admin-card ${p.active===false?'archived':''}">
+        <div class="pac-top">
+          <div>
+            <div class="pac-name">${p.name} ${p.active===false?'<span class="pac-arch">보관됨</span>':''}</div>
+            <div class="pac-detail">연습 ${p.practiceHours||0}시간 · 코칭 ${p.coachCount||0}회${p.coachMin?` (회당 ${p.coachMin}분)`:''}</div>
+            ${p.desc?`<div class="pac-desc">${p.desc}</div>`:''}
+          </div>
+          <div class="pac-price">${fmtWon(p.price||0)}<small>원</small></div>
+        </div>
+        <div class="pac-btns">
+          <button class="mini-btn" onclick="openPlanForm('${p.id}')">수정</button>
+          ${p.active===false
+            ? `<button class="mini-btn" onclick="togglePlanArchive('${p.id}',true)">복원</button>`
+            : `<button class="mini-btn" onclick="togglePlanArchive('${p.id}',false)">보관</button>`}
+          <button class="mini-btn danger" onclick="removePlan('${p.id}','${(p.name||'').replace(/'/g,'')}')">삭제</button>
+        </div>
+      </div>`).join('');
+  wrap.innerHTML=html;
+  wrap.insertAdjacentHTML('beforeend', '<div class="dashed-add" onclick="openPlanForm()">＋ 멤버십 추가</div>');
+}
+
+async function loadPlans(){
+  const snap=await window.RH.getDocs(window.RH.collection(window.RH.db,'plans'));
+  plansCache=snap.docs.map(d=>({id:d.id, ...d.data()}));
+  plansCache.sort((a,b)=>{
+    const ta=a.createdAt&&a.createdAt.seconds?a.createdAt.seconds:0;
+    const tb=b.createdAt&&b.createdAt.seconds?b.createdAt.seconds:0;
+    return ta-tb;
+  });
+  return plansCache;
+}
+
+function openPlanForm(id){
+  editingPlanId = id || null;
+  const p = id ? plansCache.find(x=>x.id===id) : null;
+  document.getElementById('planFormTitle').textContent = id ? '멤버십 수정' : '멤버십 추가';
+  document.getElementById('pfName').value = p?p.name||'':'';
+  document.getElementById('pfPrice').value = p?p.price||'':'';
+  document.getElementById('pfHours').value = p?p.practiceHours||'':'';
+  document.getElementById('pfCoach').value = p?p.coachCount||'':'';
+  document.getElementById('pfCoachMin').value = p?p.coachMin||'':'';
+  document.getElementById('pfDesc').value = p?p.desc||'':'';
+  document.getElementById('planFormOverlay').style.display='flex';
+}
+function closePlanForm(){ document.getElementById('planFormOverlay').style.display='none'; editingPlanId=null; }
+
+async function savePlan(){
+  const name=document.getElementById('pfName').value.trim();
+  const price=parseInt(document.getElementById('pfPrice').value)||0;
+  const practiceHours=parseInt(document.getElementById('pfHours').value)||0;
+  const coachCount=parseInt(document.getElementById('pfCoach').value)||0;
+  const coachMin=parseInt(document.getElementById('pfCoachMin').value)||0;
+  const desc=document.getElementById('pfDesc').value.trim();
+  if(!name){ toast('멤버십 이름을 입력해주세요'); return; }
+  const data={ name, price, practiceHours, coachCount, coachMin, desc };
+  try{
+    if(editingPlanId){
+      await window.RH.updateDoc(window.RH.doc(window.RH.db,'plans',editingPlanId), data);
+      toast('멤버십이 수정되었어요');
+    } else {
+      data.active=true;
+      data.createdAt=window.RH.serverTimestamp();
+      await window.RH.addDoc(window.RH.collection(window.RH.db,'plans'), data);
+      toast('멤버십이 추가되었어요');
+    }
+    closePlanForm();
+    renderAdmPlans();
+  }catch(e){ console.error(e); toast('저장에 실패했어요'); }
+}
+
+async function togglePlanArchive(id, restore){
+  try{
+    await window.RH.updateDoc(window.RH.doc(window.RH.db,'plans',id), { active: restore });
+    toast(restore?'복원했어요':'보관했어요 (회원 화면에서 숨김)');
+    renderAdmPlans();
+  }catch(e){ console.error(e); toast('처리에 실패했어요'); }
+}
+
+async function removePlan(id, name){
+  if(!confirm(`"${name}" 멤버십을 완전히 삭제할까요?\n(보관만 하려면 취소하고 '보관'을 쓰세요)`)) return;
+  try{
+    await window.RH.deleteDoc(window.RH.doc(window.RH.db,'plans',id));
+    toast('삭제했어요');
+    renderAdmPlans();
+  }catch(e){ console.error(e); toast('삭제에 실패했어요'); }
 }
 /* ---------------- 코칭 시간 (Firebase) ---------------- */
 let coachSlotsCache = [];
@@ -3892,6 +4071,14 @@ document.getElementById('acctText').textContent=`${state.payInfo.bank} ${state.p
 // 이미 로그인돼 있으면 onFirebaseAuthChanged가 자동으로 앱으로 넘겨줍니다.
 document.getElementById('loginView').style.display='flex';
 document.getElementById('appView').style.display='none';
+</script>
+<script>
+// PWA 서비스 워커 등록
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>console.log('SW 등록 실패', err));
+  });
+}
 </script>
 </body>
 </html>
