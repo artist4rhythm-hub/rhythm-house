@@ -2,7 +2,7 @@
 // 앱 셸을 캐시해서 빠르게 열리게 하고, PWA 설치 요건을 충족합니다.
 // Firebase 데이터는 캐시하지 않고 항상 네트워크로 갑니다 (실시간성 유지).
 
-const CACHE_NAME = 'rhythm-house-v1';
+const CACHE_NAME = 'rhythm-house-v2';
 const APP_SHELL = [
   './index.html',
   './manifest.json',
