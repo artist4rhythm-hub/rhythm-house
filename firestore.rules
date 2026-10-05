@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// ──────────────────────────────────────────────────────────────
+// 리듬 하우스 연습실 예약 시스템 — Firestore 보안 규칙
+//
+// 컬렉션 3개만 사용합니다.
+//   members   회원 정보 + 연습권
+//   bookings  예약 (문서 ID = 연습실_날짜_시  →  한 칸에 한 건만)
+//   lessons   레슨 완료 기록
+// ──────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 헬퍼 ──────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function meDoc() {
+      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/members/$(request.auth.uid))
+        && meDoc().role == 'admin';
+    }
+
+    // 이번 수정으로 바뀐 필드가 keys 안에만 들어 있는지
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // ── 회원 ──────────────────────────────────────────────
+    match /members/{uid} {
+
+      // 본인 정보는 본인이, 전체 목록은 관리자만 읽는다
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+
+      // 등록·수정·삭제·연습권 지급은 관리자만
+      allow create, update, delete: if isAdmin();
+
+      // 예외: 본인은 예약·취소 트랜잭션에서 연습권만 조정할 수 있다.
+      //       한 번에 1시간까지만 늘릴 수 있어 임의 충전은 불가능하다.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && changedOnly(['credits', 'usedThisCycle'])
+        && request.resource.data.credits is int
+        && request.resource.data.credits >= 0
+        && request.resource.data.credits <= resource.data.credits + 1
+        && request.resource.data.usedThisCycle is int
+        && request.resource.data.usedThisCycle >= 0;
+    }
+
+    // ── 예약 ──────────────────────────────────────────────
+    // 문서 ID를 "연습실_날짜_시"로 고정했기 때문에
+    // 한 연습실의 한 시간에는 문서가 하나만 존재할 수 있다.
+    // 아래에서 회원에게 '생성'만 허용하고 '덮어쓰기'를 막으므로,
+    // 두 사람이 같은 순간에 눌러도 먼저 도착한 쪽만 성공한다.
+    match /bookings/{slotId} {
+
+      allow read: if signedIn();
+
+      // 회원: 본인 이름의 연습 예약을 '생성'만 할 수 있다
+      allow create: if signedIn()
+        && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.kind == 'practice';
+
+      // 회원: 본인 예약만 취소할 수 있다
+      allow delete: if signedIn()
+        && resource.data.memberId == request.auth.uid;
+
+      // 관리자: 예약 추가·시간 차단·취소 모두 가능
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── 레슨 기록 ─────────────────────────────────────────
+    match /lessons/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 그 밖의 모든 경로는 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
