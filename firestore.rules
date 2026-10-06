@@ -62,14 +62,16 @@ service cloud.firestore {
 
       allow read: if signedIn();
 
-      // 회원: 본인 이름의 연습 예약을 '생성'만 할 수 있다
+      // 회원: 본인 이름의 연습 예약을 '생성'만 할 수 있다.
+      // 레슨(lesson)과 차단(block)은 관리자만 만들 수 있다.
       allow create: if signedIn()
         && request.resource.data.memberId == request.auth.uid
         && request.resource.data.kind == 'practice';
 
-      // 회원: 본인 예약만 취소할 수 있다
+      // 회원: 본인의 '연습' 예약만 취소할 수 있다 (레슨 일정은 못 지운다)
       allow delete: if signedIn()
-        && resource.data.memberId == request.auth.uid;
+        && resource.data.memberId == request.auth.uid
+        && resource.data.kind == 'practice';
 
       // 관리자: 예약 추가·시간 차단·취소 모두 가능
       allow create, update, delete: if isAdmin();

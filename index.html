@@ -34,6 +34,13 @@
   --f-logo:'Cafe24 Lovingu','Gothic A1',cursive;
   --f-head:'Cafe24 Ssurround','Gothic A1',sans-serif;
   --f-body:'Cafe24 Ssurround Air','Gothic A1',sans-serif;
+
+  /* 폰의 시계·배터리 표시줄과 홈 바를 피하기 위한 여백.
+     홈 화면에 설치해 전체화면으로 열었을 때만 값이 생긴다. */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -54,8 +61,9 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
   body{background:#07121D}
   .wrap{box-shadow:0 0 70px rgba(0,0,0,.55)}
 }
-.topbar{height:58px;flex-shrink:0;display:flex;align-items:center;gap:9px;
-  padding:0 18px;border-bottom:1px solid var(--line-soft);position:sticky;top:0;
+.topbar{height:calc(58px + var(--sat));flex-shrink:0;display:flex;align-items:center;gap:9px;
+  padding:var(--sat) calc(18px + var(--sar)) 0 calc(18px + var(--sal));
+  border-bottom:1px solid var(--line-soft);position:sticky;top:0;
   background:rgba(11,26,42,.92);backdrop-filter:blur(10px);z-index:20}
 .topbar img{width:28px;height:29px;object-fit:contain}
 .wordmark{font-family:var(--f-logo);font-size:21px;line-height:1}
@@ -63,12 +71,13 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .chip{height:28px;padding:0 11px;border-radius:14px;border:1px solid var(--line);
   color:var(--dim);font-size:12px;display:inline-flex;align-items:center;gap:5px}
 .chip.on{background:var(--red);border-color:var(--red);color:#FFF6EC}
-.main{flex:1;padding:18px 18px 92px}
-.nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;height:72px;
-  border-top:1px solid var(--line-soft);background:#0A1725;display:flex;align-items:center;
-  padding:0 6px;z-index:20}
-.nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
-  color:var(--mute);font-size:11px;padding:6px 0}
+.main{flex:1;padding:18px calc(18px + var(--sar)) calc(92px + var(--sab)) calc(18px + var(--sal))}
+.nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
+  height:calc(72px + var(--sab));
+  border-top:1px solid var(--line-soft);background:#0A1725;display:flex;align-items:flex-start;
+  padding:0 calc(6px + var(--sar)) var(--sab) calc(6px + var(--sal));z-index:20}
+.nav button{flex:1;height:72px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;color:var(--mute);font-size:11px;padding:6px 0}
 .nav button.on{color:var(--cream)}
 
 /* ---------- 카드 ---------- */
@@ -114,9 +123,10 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--cream)}
 .slot .hr{font-family:var(--f-head);font-size:16px;line-height:1}
 .slot .st{font-size:9px;opacity:.8}
-.slot.taken{background:#16293D;border-color:#20364E;color:var(--mute);cursor:not-allowed}
+.slot.taken{background:#16293D;border-color:#20364E;color:var(--mute)}
 .slot.mine{background:var(--red);border-color:var(--red);color:#FFF6EC}
-.slot.blocked{background:transparent;border-style:dashed;border-color:#3A5570;color:var(--mute);cursor:not-allowed}
+.slot.lesson{background:#2B2518;border-color:#8A7442;color:#E3CFA6}
+.slot.blocked{background:transparent;border-style:dashed;border-color:#3A5570;color:var(--mute)}
 .slot.past{background:transparent;border-color:var(--line-soft);color:#4C637B;cursor:not-allowed}
 .legend{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
 .legend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)}
@@ -137,24 +147,26 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 
 /* ---------- 모달 / 토스트 ---------- */
 .overlay{position:fixed;inset:0;background:rgba(5,12,20,.76);display:flex;align-items:center;
-  justify-content:center;padding:22px;z-index:60;backdrop-filter:blur(3px)}
+  justify-content:center;z-index:60;backdrop-filter:blur(3px);overflow-y:auto;
+  padding:calc(22px + var(--sat)) calc(22px + var(--sar)) calc(22px + var(--sab)) calc(22px + var(--sal))}
 .modal{width:100%;max-width:400px;background:var(--surf);border:1px solid var(--line);
   border-radius:20px;padding:22px}
 .modal h3{font-family:var(--f-head);font-size:19px;font-weight:400;margin-bottom:10px}
 .modal p{font-size:14px;color:var(--dim);line-height:1.65}
 .modal .acts{display:flex;gap:9px;margin-top:20px}
 .modal .acts .btn{flex:1;height:48px}
-.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--surf2);
+.toast{position:fixed;left:50%;bottom:calc(96px + var(--sab));transform:translateX(-50%);background:var(--surf2);
   border:1px solid var(--line);color:var(--cream);padding:13px 20px;border-radius:13px;
   font-size:14px;z-index:80;max-width:88%;text-align:center;box-shadow:0 8px 28px rgba(0,0,0,.4)}
 
 /* ---------- 로그인 ---------- */
-.auth{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 30px 30px}
+.auth{flex:1;display:flex;flex-direction:column;justify-content:center;
+  padding:calc(40px + var(--sat)) calc(30px + var(--sar)) 30px calc(30px + var(--sal))}
 .auth .brand{display:flex;flex-direction:column;align-items:center}
 .auth .brand img{width:116px;height:122px;object-fit:contain}
 .auth .brand .lg{font-family:var(--f-logo);font-size:44px;line-height:1.2;margin-top:12px}
 .auth .brand .tag{font-size:13px;color:var(--dim);letter-spacing:2px;margin-top:4px}
-.foot{text-align:center;padding:22px 0 26px;font-size:12px;color:var(--mute)}
+.foot{text-align:center;padding:22px 0 calc(26px + var(--sab));font-size:12px;color:var(--mute)}
 .keys{font-family:var(--f-head);font-size:11px;letter-spacing:2px;color:var(--red);margin-top:8px}
 a{color:var(--red-l)}
 </style>
@@ -301,6 +313,19 @@ function roomOf(id){ return ROOMS.find(r=>r.id===id) || ROOMS[0]; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>(
   {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function isAdmin(){ return ME && ME.role === 'admin'; }
+
+/**
+ * 예약 문서에는 회원 이름을 저장하지 않는다 (회원끼리 서로를 알 수 없도록).
+ * 관리자 화면에서만 회원 목록에서 이름을 찾아 보여준다.
+ * memberName은 예전 버전으로 만들어진 예약을 위한 대비책이다.
+ */
+function nameOf(b){
+  if(!b) return '';
+  if(b.kind === 'block') return '차단';
+  if(b.memberId && ME && b.memberId === ME.uid) return (ME.name || '나');
+  const m = members.find(x=>x.uid === b.memberId);
+  return (m && m.name) || b.memberName || '예약';
+}
 
 /** 유효기간이 지난 연습권은 0으로 본다 */
 function liveCredits(m){
@@ -534,18 +559,23 @@ function nextLessonText(){
 }
 function bookingCard(b){
   const r = roomOf(b.roomId);
+  const lesson = b.kind === 'lesson';
   const start = slotTime(b.date,b.hour);
-  const canCancel = (start - Date.now()) > CANCEL_LIMIT_H*3600*1000;
+  const canCancel = !lesson && (start - Date.now()) > CANCEL_LIMIT_H*3600*1000;
   return '<div class="card" style="padding:14px 15px;margin-bottom:10px">'+
     '<div class="row">'+
-      '<div style="width:5px;height:38px;border-radius:3px;background:'+r.color+';flex-shrink:0"></div>'+
+      '<div style="width:5px;height:38px;border-radius:3px;background:'+
+        (lesson ? '#C9A961' : r.color)+';flex-shrink:0"></div>'+
       '<div style="flex:1">'+
         '<div>'+fmtDate(b.date)+' '+pad(b.hour)+':00 – '+pad(b.hour+1)+':00</div>'+
-        '<div class="sub" style="color:'+r.color+';margin-top:4px">'+r.name+' · 1시간</div>'+
+        '<div class="sub" style="color:'+(lesson?'#E3CFA6':r.color)+';margin-top:4px">'+
+          r.name+' · '+(lesson ? '레슨' : '1시간')+'</div>'+
       '</div>'+
-      (canCancel
-        ? '<button class="btn sm" data-act="cancel" data-id="'+b.id+'">취소</button>'
-        : '<div class="sub muted" style="text-align:right;line-height:1.5">3시간 전<br>취소 마감</div>')+
+      (lesson
+        ? '<div class="sub muted" style="text-align:right;line-height:1.5">레슨 일정</div>'
+        : canCancel
+          ? '<button class="btn sm" data-act="cancel" data-id="'+b.id+'">취소</button>'
+          : '<div class="sub muted" style="text-align:right;line-height:1.5">3시간 전<br>취소 마감</div>')+
     '</div></div>';
 }
 
@@ -565,12 +595,22 @@ function renderBook(){
     const b = dayBookings.find(x=> x.roomId===selRoom && x.hour===h);
     const past = slotTime(selDate,h) <= new Date();
     let cls='slot', st='가능', attr='';
-    if(b && b.kind==='block'){ cls+=' blocked'; st='차단'; }
-    else if(b && b.memberId===ME.uid){ cls+=' mine'; st='내 예약'; attr=' data-act="cancel" data-id="'+b.id+'"'; }
-    else if(b){ cls+=' taken'; st = admin ? esc(b.memberName||'예약') : '예약됨';
-                if(admin) attr=' data-act="admCancel" data-id="'+b.id+'"'; }
+
+    if(b){
+      // 회원에게는 누구인지 보이지 않는다. 쓸 수 없다는 것만 분명히 보여준다.
+      if(b.kind==='block'){       cls+=' blocked'; st='사용 불가'; }
+      else if(b.kind==='lesson'){ cls+=' lesson';  st = admin ? esc(nameOf(b))+' 레슨' : '레슨'; }
+      else if(b.memberId===ME.uid){ cls+=' mine';  st='내 예약'; }
+      else {                      cls+=' taken';   st = admin ? esc(nameOf(b)) : '예약 완료'; }
+
+      if(admin) attr = ' data-act="admCancel" data-id="'+b.id+'"';
+      else if(b.memberId===ME.uid && b.kind!=='lesson')
+                attr = ' data-act="cancel" data-id="'+b.id+'"';
+      else      attr = ' data-act="why" data-w="'+(b.kind==='block'?'block':b.kind==='lesson'?'lesson':'taken')+'"';
+    }
     else if(past){ cls+=' past'; st='지난 시간'; }
     else { attr = ' data-act="book" data-h="'+h+'"'; }
+
     cells.push('<button class="'+cls+'"'+attr+'><span class="hr">'+pad(h)+'</span><span class="st">'+st+'</span></button>');
   }
 
@@ -591,13 +631,15 @@ function renderBook(){
     '<div class="legend">'+
       '<span><i style="background:var(--surf);border:1px solid var(--line)"></i>가능</span>'+
       '<span><i style="background:var(--red)"></i>내 예약</span>'+
-      '<span><i style="background:#16293D;border:1px solid #20364E"></i>예약됨</span>'+
-      '<span><i style="border:1px dashed #3A5570"></i>차단</span>'+
+      '<span><i style="background:#16293D;border:1px solid #20364E"></i>예약 완료</span>'+
+      '<span><i style="background:#2B2518;border:1px solid #8A7442"></i>레슨</span>'+
+      '<span><i style="border:1px dashed #3A5570"></i>사용 불가</span>'+
     '</div>'+
     '<div class="grid">'+cells.join('')+'</div>'+
 
-    (admin ? '<button class="btn" style="width:100%;margin-top:14px;height:46px" data-act="blockMode">'+
-             '현황에서 시간 차단하기 →</button>' : '');
+    (admin
+      ? '<div class="sub muted" style="margin-top:12px">빈 칸을 누르면 내 연습·레슨·회원 예약·차단을 고를 수 있어요.</div>'
+      : '<div class="sub muted" style="margin-top:12px">이미 예약된 시간은 누가 썼는지 보이지 않습니다.</div>');
 
   bind('pgBook');
 }
@@ -645,13 +687,17 @@ function renderToday(){
     for(let h=1; h<24; h++)
       lines.push('<div class="hline" style="top:'+(h*HOUR_PX)+'px"></div>');
     const evs = dayBookings.filter(b=>b.roomId===r.id).map(b=>{
-      const blocked = b.kind==='block';
-      const bg = blocked ? 'transparent' : r.fill;
-      const ink = blocked ? 'var(--mute)' : r.ink;
-      const bd  = blocked ? '1px dashed #3A5570' : '0';
+      let bg, ink, bd, label;
+      if(b.kind==='block'){
+        bg='transparent'; ink='var(--mute)'; bd='1px dashed #3A5570'; label='사용 불가';
+      } else if(b.kind==='lesson'){
+        bg='#2B2518'; ink='#E3CFA6'; bd='1px solid #8A7442'; label='레슨 · '+nameOf(b);
+      } else {
+        bg=r.fill; ink=r.ink; bd='0'; label=nameOf(b);
+      }
       return '<div class="ev" data-act="admCancel" data-id="'+b.id+'" style="top:'+(b.hour*HOUR_PX+3)+
         'px;height:'+(HOUR_PX-6)+'px;background:'+bg+';border:'+bd+';color:'+ink+'">'+
-        '<div style="font-size:12px;line-height:1.3">'+esc(blocked ? '차단' : (b.memberName||'예약'))+'</div>'+
+        '<div style="font-size:12px;line-height:1.3">'+esc(label)+'</div>'+
         '<div style="font-size:10px;opacity:.8">'+pad(b.hour)+':00</div></div>';
     }).join('');
     const empties = [];
@@ -757,6 +803,7 @@ async function handle(d){
     case 'date':    selDate = d.d; subscribeDay(); renderBook(); break;
     case 'room':    selRoom = d.r; renderBook(); break;
     case 'book':    confirmBook(Number(d.h)); break;
+    case 'why':     whyBlocked(d.w); break;
     case 'cancel':  confirmCancel(d.id); break;
     case 'dayShift':selDate = ymd(addDays(parseYmd(selDate), Number(d.n))); subscribeDay(); renderToday(); break;
     case 'dayToday':selDate = ymd(new Date()); subscribeDay(); renderToday(); break;
@@ -772,7 +819,9 @@ async function handle(d){
 /* ===================== 예약 / 취소 ===================== */
 function confirmBook(hour){
   const r = roomOf(selRoom);
-  if(!isAdmin() && liveCredits(ME) < 1){
+  // 관리자는 내 연습 · 레슨 · 회원 예약 · 차단 중에서 고른다
+  if(isAdmin()){ admSlot(selRoom, hour); return; }
+  if(liveCredits(ME) < 1){
     info({ title:'연습권이 없어요',
       body:'다음 레슨을 마치면 연습권이 지급됩니다.<br>자세한 내용은 관리자에게 문의해 주세요.' });
     return;
@@ -781,12 +830,23 @@ function confirmBook(hour){
     title:'이 시간으로 예약할까요?',
     body: fmtDate(selDate)+' '+pad(hour)+':00 – '+pad(hour+1)+':00<br>'+
           r.name+' · 1시간'+
-          (isAdmin()
-            ? '<br><br><span class="muted">관리자 예약이라 연습권은 차감되지 않습니다.</span>'
-            : '<br><br><span style="color:var(--white-room)">연습권 1시간이 차감됩니다.</span>'),
+          '<br><br><span style="color:var(--white-room)">연습권 1시간이 차감됩니다.</span>',
     ok:'예약하기',
     onOk: ()=> doBook(hour)
   });
+}
+
+/** 회원이 쓸 수 없는 칸을 눌렀을 때의 안내 */
+function whyBlocked(w){
+  if(w==='block')
+    info({ title:'사용할 수 없는 시간이에요',
+           body:'연습실 사정으로 닫아둔 시간입니다.<br>다른 시간을 선택해 주세요.' });
+  else if(w==='lesson')
+    info({ title:'레슨이 있는 시간이에요',
+           body:'이 시간에는 레슨이 진행됩니다.<br>다른 시간을 선택해 주세요.' });
+  else
+    info({ title:'이미 예약된 시간이에요',
+           body:'다른 분이 먼저 예약했습니다.<br>다른 시간을 선택해 주세요.' });
 }
 async function doBook(hour){
   const r = roomOf(selRoom);
@@ -808,9 +868,10 @@ async function doBook(hour){
         if((m.credits||0) < 1) throw new Error('NOCREDIT');
       }
 
+      // 이름은 저장하지 않는다 — 회원끼리 서로를 알 수 없게 하기 위해서다
       tx.set(bRef, {
         roomId: selRoom, roomName: r.name, date: selDate, hour,
-        memberId: ME.uid, memberName: ME.name || '', kind:'practice',
+        memberId: ME.uid, kind:'practice',
         addedByAdmin: admin, createdAt: serverTimestamp()
       });
       if(!admin){
@@ -878,34 +939,57 @@ async function doCancel(b){
 /* ===================== 관리자 · 슬롯 조작 ===================== */
 function admSlot(roomId, hour){
   const r = roomOf(roomId);
+  const taken = dayBookings.some(b=>b.roomId===roomId && b.hour===hour);
+  const opts = members.filter(m=>m.role!=='admin').map(m=>
+    '<option value="'+m.uid+'">'+esc(m.name||m.email)+'</option>').join('');
   const host = document.getElementById('modalHost');
   host.innerHTML =
     '<div class="overlay"><div class="modal">'+
-      '<h3>'+fmtDate(selDate)+' '+pad(hour)+':00</h3>'+
+      '<h3>'+fmtDate(selDate)+' '+pad(hour)+':00 – '+pad(hour+1)+':00</h3>'+
       '<p>'+r.name+' · 1시간</p>'+
+      (taken ? '<p class="sub rose" style="margin-top:8px">이미 사용 중인 시간이에요</p>' : '')+
       '<div class="col" style="margin-top:18px">'+
-        '<div><label for="admWho">회원 예약으로 추가</label>'+
-          '<select id="admWho"><option value="">— 선택 —</option>'+
-          members.filter(m=>m.role!=='admin').map(m=>
-            '<option value="'+m.uid+'">'+esc(m.name||m.email)+'</option>').join('')+
-          '</select></div>'+
-        '<button class="btn primary" style="height:48px" id="admAdd">예약 추가 (연습권 차감 없음)</button>'+
-        '<button class="btn" style="height:48px" id="admBlock">이 시간 차단하기</button>'+
+
+        '<button class="btn primary" style="height:48px" id="admMine">내가 사용 · 연습</button>'+
+
+        '<div style="margin-top:4px"><label for="admWho">회원 선택</label>'+
+          '<select id="admWho"><option value="">— 선택 —</option>'+opts+'</select></div>'+
+        '<div class="row" style="gap:8px">'+
+          '<button class="btn" style="flex:1;height:46px" id="admAdd">회원 예약</button>'+
+          '<button class="btn" style="flex:1;height:46px" id="admLesson">레슨으로 잡기</button>'+
+        '</div>'+
+        '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
+          '회원 예약과 레슨은 연습권이 차감되지 않습니다.<br>'+
+          '레슨은 회원을 고르지 않으면 이름 없이 잡힙니다.</div>'+
+
+        '<button class="btn" style="height:46px;margin-top:4px" id="admBlock">이 시간 닫기 (사용 불가)</button>'+
         '<button class="btn" style="height:44px" id="admClose">닫기</button>'+
       '</div></div></div>';
+
   host.querySelector('#admClose').onclick = closeModal;
+
+  host.querySelector('#admMine').onclick = async ()=>{
+    closeModal();
+    await writeSlot(roomId, hour, { kind:'practice', memberId: ME.uid });
+    toast('연습실을 잡았어요');
+  };
   host.querySelector('#admBlock').onclick = async ()=>{
     closeModal();
-    await writeSlot(roomId, hour, { kind:'block', memberId:'', memberName:'차단' });
-    toast('시간을 차단했어요');
+    await writeSlot(roomId, hour, { kind:'block', memberId:'' });
+    toast('이 시간을 닫았어요');
   };
   host.querySelector('#admAdd').onclick = async ()=>{
     const uid = host.querySelector('#admWho').value;
     if(!uid){ toast('회원을 선택해 주세요'); return; }
-    const m = members.find(x=>x.uid===uid);
     closeModal();
-    await writeSlot(roomId, hour, { kind:'practice', memberId:uid, memberName:m.name||'' });
+    await writeSlot(roomId, hour, { kind:'practice', memberId:uid });
     toast('예약을 추가했어요');
+  };
+  host.querySelector('#admLesson').onclick = async ()=>{
+    const uid = host.querySelector('#admWho').value;
+    closeModal();
+    await writeSlot(roomId, hour, { kind:'lesson', memberId: uid || ME.uid });
+    toast('레슨 일정을 잡았어요');
   };
 }
 async function writeSlot(roomId, hour, extra){
@@ -920,15 +1004,18 @@ async function writeSlot(roomId, hour, extra){
 function admCancel(id){
   const b = dayBookings.find(x=>x.id===id);
   if(!b) return;
-  const who = b.kind==='block' ? '차단' : (b.memberName||'예약');
+  const who = b.kind==='lesson' ? ('레슨 · '+nameOf(b)) : nameOf(b);
+  const refundNote = (b.kind==='practice' && b.memberId && !b.addedByAdmin)
+    ? '<br><br><span class="muted">회원의 연습권 1시간이 돌아갑니다.</span>' : '';
   ask({
-    title: (b.kind==='block' ? '차단을 해제할까요?' : '이 예약을 취소할까요?'),
-    body: fmtDate(b.date)+' '+pad(b.hour)+':00 · '+roomOf(b.roomId).name+'<br>'+esc(who)+
-      (b.kind==='block' ? '' : '<br><br><span class="muted">회원의 연습권 1시간이 돌아갑니다.</span>'),
-    ok: b.kind==='block' ? '차단 해제' : '예약 취소',
+    title: b.kind==='block'  ? '이 시간을 다시 열까요?'
+         : b.kind==='lesson' ? '레슨 일정을 지울까요?'
+         : '이 예약을 취소할까요?',
+    body: fmtDate(b.date)+' '+pad(b.hour)+':00 · '+roomOf(b.roomId).name+'<br>'+esc(who)+refundNote,
+    ok: b.kind==='block' ? '다시 열기' : b.kind==='lesson' ? '레슨 삭제' : '예약 취소',
     onOk: async ()=>{
       try{
-        if(b.kind!=='block' && b.memberId && !b.addedByAdmin){
+        if(b.kind==='practice' && b.memberId && !b.addedByAdmin){
           await runTransaction(db, async tx=>{
             const mRef = doc(db,'members',b.memberId);
             const mSnap = await tx.get(mRef);
