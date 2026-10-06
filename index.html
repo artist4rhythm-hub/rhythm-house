@@ -41,6 +41,8 @@
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
+
+  --maxw: 520px;   /* 화면 폭에 따라 아래 미디어 쿼리에서 넓어진다 */
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
@@ -55,7 +57,7 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .hide{display:none !important}
 
 /* ---------- 레이아웃 ---------- */
-.wrap{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;
+.wrap{max-width:var(--maxw);margin:0 auto;min-height:100%;display:flex;flex-direction:column;
   background:var(--ground);position:relative}
 @media(min-width:560px){
   body{background:#07121D}
@@ -72,7 +74,7 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
   color:var(--dim);font-size:12px;display:inline-flex;align-items:center;gap:5px}
 .chip.on{background:var(--red);border-color:var(--red);color:#FFF6EC}
 .main{flex:1;padding:18px calc(18px + var(--sar)) calc(92px + var(--sab)) calc(18px + var(--sal))}
-.nav{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;
+.nav{position:fixed;bottom:0;left:0;right:0;max-width:var(--maxw);margin:0 auto;
   height:calc(72px + var(--sab));
   border-top:1px solid var(--line-soft);background:#0A1725;display:flex;align-items:flex-start;
   padding:0 calc(6px + var(--sar)) var(--sab) calc(6px + var(--sal));z-index:20}
@@ -131,6 +133,64 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
 .legend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)}
 .legend i{width:11px;height:11px;border-radius:3px;display:block}
+
+/* ---------- 날짜별 / 주간 전환 ---------- */
+.modes{display:flex;gap:5px;background:var(--surf);border:1px solid var(--line);
+  border-radius:13px;padding:4px;margin-top:14px}
+.modes button{flex:1;height:38px;border-radius:9px;font-size:13px;color:var(--dim)}
+.modes button.on{background:var(--surf2);color:var(--cream)}
+
+/* ---------- 주간 한눈에 ---------- */
+.wk{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--deep)}
+.wkhead{display:flex;background:var(--surf);border-bottom:1px solid var(--line)}
+.wkhead .corner{width:36px;flex:none;border-right:1px solid var(--line)}
+.wkhead .cell{flex:1;min-width:0;text-align:center;padding:7px 0;font-size:10px;color:var(--dim)}
+.wkhead .cell b{display:block;font-family:var(--f-head);font-size:15px;color:var(--cream);margin-top:1px}
+.wkhead .cell.on{background:var(--surf2)}
+.wkhead .cell.on b{color:var(--red-l)}
+.wkbody{display:flex;max-height:min(56vh,520px);overflow-y:auto;scrollbar-width:thin}
+.wkhours{width:36px;flex:none;border-right:1px solid var(--line)}
+.wkhours div{height:22px;line-height:22px;font-size:9px;color:var(--mute);text-align:right;padding-right:5px}
+.wkcols{flex:1;display:flex;min-width:0}
+.wkcol{flex:1;min-width:0;border-right:1px solid var(--line-soft)}
+.wkcol:last-child{border-right:0}
+.wkcol.today{background:rgba(200,70,58,.05)}
+.wkrow{height:22px;display:flex;gap:2px;padding:2px 3px;border-bottom:1px solid #16263A;width:100%}
+.wc{flex:1;min-width:0;display:block;border-radius:3px;background:#17293C}
+.wc.past{background:#101B27}
+.wc.taken{background:#3A5A80}
+.wc.mine{background:var(--red)}
+.wc.lesson{background:#8A7442}
+.wc.block{background:#101C29;border:1px dashed #334B66}
+.wklegend{display:flex;gap:11px;flex-wrap:wrap;margin-top:11px}
+.wklegend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)}
+.wklegend i{width:11px;height:11px;border-radius:3px;display:block}
+
+/* ---------- 안내 배너 ---------- */
+.notice{border-radius:13px;padding:14px 16px;background:#3A1A16;border:1px solid #6B2E26;
+  color:#F2BDB3;font-size:13px;line-height:1.65;margin-top:13px}
+.notice b{font-family:var(--f-head);color:#FFD7CE}
+
+/* ---------- 태블릿 가로 · PC ---------- */
+@media(min-width:900px){
+  :root{ --maxw:1000px }
+  .main{padding:24px 26px calc(104px + var(--sab))}
+  .grid{grid-template-columns:repeat(8,minmax(0,1fr))}
+  .slot{height:60px}
+  .slot .hr{font-size:18px}
+  .slot .st{font-size:10px}
+  .wkhead .cell{font-size:11px;padding:9px 0}
+  .wkrow,.wkhours div{height:26px}
+  .wkhours div{line-height:26px;font-size:10px}
+  .wkbody{max-height:min(60vh,620px)}
+  .tl .ev div:first-child{font-size:13px}
+}
+@media(min-width:1280px){
+  :root{ --maxw:1240px }
+  .grid{grid-template-columns:repeat(12,minmax(0,1fr))}
+  .wkrow,.wkhours div{height:30px}
+  .wkhours div{line-height:30px}
+}
 
 /* ---------- 타임라인 ---------- */
 .tl{display:flex;gap:8px}
@@ -293,10 +353,14 @@ let page = 'home';
 let selDate = ymd(new Date());
 let selRoom = 'black';
 let dayBookings = [];       // 선택 날짜의 예약
+let weekBookings = [];      // 선택 주간(7일)의 예약
 let myBookings  = [];       // 내 예약 전체
 let members     = [];       // (관리자) 회원 목록
-let unsubDay = null, unsubMine = null, unsubMe = null, unsubMembers = null;
+let unsubDay = null, unsubWeek = null, unsubMine = null, unsubMe = null, unsubMembers = null;
 let scrolledFor = null;     // 현황 타임라인 자동 스크롤을 한 날짜당 1회만
+let bookMode  = 'day';      // 예약 화면: day | week
+let adminMode = 'day';      // 현황 화면: day | week
+let weekStart = '';         // 주간 보기의 월요일
 
 /* ===================== 유틸 ===================== */
 function ymd(d){
@@ -308,6 +372,11 @@ function pad(n){ return String(n).padStart(2,'0'); }
 function dow(d){ return ['일','월','화','수','목','금','토'][d.getDay()]; }
 function fmtDate(s){ const d=parseYmd(s); return (d.getMonth()+1)+'월 '+d.getDate()+'일 ('+dow(d)+')'; }
 function slotTime(dateStr, hour){ const d=parseYmd(dateStr); d.setHours(hour,0,0,0); return d; }
+/** 그 날짜가 속한 주의 월요일 */
+function startOfWeek(s){
+  const d = parseYmd(s), w = d.getDay();      // 0=일요일
+  return ymd(addDays(d, w===0 ? -6 : 1-w));
+}
 function bookingId(room,dateStr,hour){ return room+'_'+dateStr+'_'+hour; }
 function roomOf(id){ return ROOMS.find(r=>r.id===id) || ROOMS[0]; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>(
@@ -401,8 +470,8 @@ function show(which){
 }
 
 onAuthStateChanged(auth, async (user)=>{
-  [unsubDay, unsubMine, unsubMe, unsubMembers].forEach(u=>{ if(u) u(); });
-  unsubDay = unsubMine = unsubMe = unsubMembers = null;
+  [unsubDay, unsubWeek, unsubMine, unsubMe, unsubMembers].forEach(u=>{ if(u) u(); });
+  unsubDay = unsubWeek = unsubMine = unsubMe = unsubMembers = null;
 
   if(!user){ ME=null; show('scLogin'); return; }
 
@@ -422,6 +491,8 @@ onAuthStateChanged(auth, async (user)=>{
   document.getElementById('tagAdmin').classList.toggle('hide', !isAdmin());
   buildNav();
   if(isAdmin()) subscribeMembers();   // 예약 추가 모달에서 회원 목록이 필요
+  weekStart = startOfWeek(ymd(new Date()));
+  subscribeWeek();                    // 주간 보기 + 홈의 종료 임박 안내에 쓰인다
   go(isAdmin() ? 'today' : 'home');
 
   // 내 정보 실시간 구독 (연습권 변화 즉시 반영)
@@ -497,6 +568,19 @@ function subscribeDay(){
     ()=> toast('현황을 불러오지 못했어요')
   );
 }
+function subscribeWeek(){
+  if(unsubWeek) unsubWeek();
+  const a = weekStart;
+  const b = ymd(addDays(parseYmd(weekStart), 6));
+  unsubWeek = onSnapshot(
+    query(collection(db,'bookings'), where('date','>=',a), where('date','<=',b)),
+    s=>{
+      weekBookings = s.docs.map(d=>({ id:d.id, ...d.data() }));
+      render();
+    },
+    ()=> toast('주간 현황을 불러오지 못했어요')
+  );
+}
 function subscribeMembers(){
   if(!isAdmin() || unsubMembers) return;
   unsubMembers = onSnapshot(collection(db,'members'), s=>{
@@ -531,6 +615,8 @@ function renderHome(){
       '<div class="sub rose" style="margin-top:11px">'+esc(tierNote)+'</div>'+
     '</div>'+
 
+    endingSoonNotice()+
+
     (creditExpired(ME)
       ? '<div class="card flat" style="margin-top:12px;border-color:#5A2A26">'+
           '<div class="sub rose">연습권 유효기간이 지났어요. 다음 레슨 때 새로 지급됩니다.</div></div>'
@@ -551,6 +637,26 @@ function renderHome(){
     '<button class="cta" style="margin-top:18px" data-act="goBook">연습실 예약하기</button>';
 
   bind('pgHome');
+}
+/**
+ * 지금 연습 중이고, 끝나기 5분 안이며, 바로 다음 시간에 예약이 있을 때만 안내한다.
+ * 뒤에 아무도 없으면 굳이 재촉하지 않는다.
+ */
+function endingSoonNotice(){
+  const now = new Date();
+  const cur = myBookings.find(b=>{
+    const st = slotTime(b.date, b.hour).getTime();
+    return now.getTime() >= st && now.getTime() < st + 3600000;
+  });
+  if(!cur) return '';
+  const endAt = slotTime(cur.date, cur.hour).getTime() + 3600000;
+  const leftMin = Math.max(0, Math.ceil((endAt - now.getTime())/60000));
+  if(leftMin > 5) return '';
+  const nextB = weekBookings.find(x=>
+    x.roomId===cur.roomId && x.date===cur.date && x.hour===cur.hour+1 && x.kind!=='block');
+  if(!nextB) return '';
+  return '<div class="notice"><b>'+leftMin+'분 뒤 다음 연습이 시작돼요</b><br>'+
+    pad(cur.hour+1)+':00 전에 정리하고 나와 주세요. 스틱과 개인 물품을 꼭 챙겨주세요.</div>';
 }
 function nextLessonText(){
   if(ME.lessonDay==null || !ME.lessonTime) return '일정 미등록';
@@ -579,8 +685,84 @@ function bookingCard(b){
     '</div></div>';
 }
 
+/* ===================== 주간 한눈에 ===================== */
+/**
+ * 한 칸이 1시간, 칸 안의 왼쪽 막대가 블랙룸 · 오른쪽 막대가 화이트룸이다.
+ * 회원 화면에서는 누구 예약인지 구분하지 않고 '예약됨'으로만 칠한다.
+ */
+function weekGrid(){
+  const todayS = ymd(new Date());
+  const now = new Date();
+  const days = [];
+  for(let i=0;i<7;i++){
+    const d = addDays(parseYmd(weekStart), i);
+    days.push({ s:ymd(d), d:d.getDate(), w:dow(d) });
+  }
+
+  const head = '<div class="wkhead"><div class="corner"></div>'+
+    days.map(x=>'<button class="cell'+(x.s===todayS?' on':'')+'" data-act="wkDay" data-d="'+x.s+'">'+
+      x.w+'<b>'+x.d+'</b></button>').join('')+'</div>';
+
+  const hours = [];
+  for(let h=0; h<24; h++) hours.push('<div>'+(h%2===0?pad(h):'')+'</div>');
+
+  const cols = days.map(x=>{
+    const rows = [];
+    for(let h=0; h<24; h++){
+      const segs = ROOMS.map(r=>{
+        const b = weekBookings.find(y=>y.roomId===r.id && y.date===x.s && y.hour===h);
+        let cls = 'wc';
+        if(b){
+          if(b.kind==='block')          cls += ' block';
+          else if(b.kind==='lesson')    cls += ' lesson';
+          else if(b.memberId===ME.uid)  cls += ' mine';
+          else                          cls += ' taken';
+        } else if(slotTime(x.s,h) <= now) cls += ' past';
+        return '<i class="'+cls+'"></i>';
+      }).join('');
+      rows.push('<button class="wkrow" data-act="wkDay" data-d="'+x.s+'">'+segs+'</button>');
+    }
+    return '<div class="wkcol'+(x.s===todayS?' today':'')+'">'+rows.join('')+'</div>';
+  }).join('');
+
+  return '<div class="wk">'+head+
+    '<div class="wkbody"><div class="wkhours">'+hours.join('')+'</div>'+
+    '<div class="wkcols">'+cols+'</div></div></div>'+
+    '<div class="wklegend">'+
+      '<span><i style="background:#17293C"></i>가능</span>'+
+      '<span><i style="background:var(--red)"></i>내 예약</span>'+
+      '<span><i style="background:#3A5A80"></i>예약됨</span>'+
+      '<span><i style="background:#8A7442"></i>레슨</span>'+
+      '<span><i style="background:#101C29;border:1px dashed #334B66"></i>사용 불가</span>'+
+    '</div>';
+}
+function weekNav(){
+  const a = parseYmd(weekStart), b = addDays(a,6);
+  const label = (a.getMonth()+1)+'월 '+a.getDate()+'일 – '+(b.getMonth()+1)+'월 '+b.getDate()+'일';
+  return '<div class="row" style="margin-top:14px">'+
+      '<button class="btn sm" data-act="wkShift" data-n="-1">‹</button>'+
+      '<div style="flex:1;text-align:center" class="num">'+label+'</div>'+
+      '<button class="btn sm" data-act="wkShift" data-n="1">›</button>'+
+      '<button class="btn sm" data-act="wkNow">이번 주</button>'+
+    '</div>'+
+    '<div class="sec"><span>칸마다 왼쪽 블랙룸 · 오른쪽 화이트룸</span>'+
+      '<span class="muted">날짜를 누르면 그날로</span></div>';
+}
+
 /* ===================== 예약 ===================== */
 function renderBook(){
+  const head =
+    '<div class="row"><div class="h1" style="font-size:19px">예약하기</div><div class="spacer"></div>'+
+      '<span class="chip">연습권 <b class="gold">'+liveCredits(ME)+'시간</b></span></div>'+
+    '<div class="modes">'+
+      '<button data-act="bookMode" data-m="day"  class="'+(bookMode==='day' ?'on':'')+'">날짜별</button>'+
+      '<button data-act="bookMode" data-m="week" class="'+(bookMode==='week'?'on':'')+'">주간 한눈에</button>'+
+    '</div>';
+  document.getElementById('pgBook').innerHTML =
+    head + (bookMode==='week' ? (weekNav()+weekGrid()) : bookDayHTML());
+  bind('pgBook');
+}
+function bookDayHTML(){
   const today = new Date();
   const dates = [];
   for(let i=0;i<BOOK_AHEAD_DAYS;i++){
@@ -614,11 +796,7 @@ function renderBook(){
     cells.push('<button class="'+cls+'"'+attr+'><span class="hr">'+pad(h)+'</span><span class="st">'+st+'</span></button>');
   }
 
-  document.getElementById('pgBook').innerHTML =
-    '<div class="row"><div class="h1" style="font-size:19px">예약하기</div><div class="spacer"></div>'+
-      '<span class="chip">연습권 <b class="gold">'+c+'시간</b></span></div>'+
-
-    '<div class="sec">날짜</div>'+
+  return '<div class="sec">날짜</div>'+
     '<div class="dates">'+ dates.map(d=>
       '<button data-act="date" data-d="'+d.s+'" class="'+(d.s===selDate?'on':'')+'">'+
         '<span class="w">'+d.w+'</span><span class="d">'+d.d+'</span></button>').join('') +'</div>'+
@@ -640,8 +818,6 @@ function renderBook(){
     (admin
       ? '<div class="sub muted" style="margin-top:12px">빈 칸을 누르면 내 연습·레슨·회원 예약·차단을 고를 수 있어요.</div>'
       : '<div class="sub muted" style="margin-top:12px">이미 예약된 시간은 누가 썼는지 보이지 않습니다.</div>');
-
-  bind('pgBook');
 }
 
 /* ===================== 내 정보 ===================== */
@@ -673,6 +849,17 @@ function kv(k,v,last){
 
 /* ===================== 관리자 · 오늘 현황 ===================== */
 function renderToday(){
+  const modes =
+    '<div class="modes" style="margin-top:0;margin-bottom:14px">'+
+      '<button data-act="adminMode" data-m="day"  class="'+(adminMode==='day' ?'on':'')+'">하루 타임라인</button>'+
+      '<button data-act="adminMode" data-m="week" class="'+(adminMode==='week'?'on':'')+'">주간 한눈에</button>'+
+    '</div>';
+  if(adminMode==='week'){
+    document.getElementById('pgToday').innerHTML = modes + weekNav() + weekGrid();
+    bind('pgToday');
+    return;
+  }
+
   const HOUR_PX = 40, H = 24*HOUR_PX;
   const now = new Date();
   const isToday = selDate === ymd(now);
@@ -717,7 +904,7 @@ function renderToday(){
   const cb  = dayBookings.filter(b=>b.roomId==='black'&&b.kind!=='block').length;
   const cw  = dayBookings.filter(b=>b.roomId==='white'&&b.kind!=='block').length;
 
-  document.getElementById('pgToday').innerHTML =
+  document.getElementById('pgToday').innerHTML = modes +
     '<div class="row">'+
       '<button class="btn sm" data-act="dayShift" data-n="-1">‹</button>'+
       '<div style="flex:1;text-align:center" class="num">'+fmtDate(selDate)+'</div>'+
@@ -804,6 +991,14 @@ async function handle(d){
     case 'room':    selRoom = d.r; renderBook(); break;
     case 'book':    confirmBook(Number(d.h)); break;
     case 'why':     whyBlocked(d.w); break;
+    case 'bookMode':  bookMode  = d.m; render(); break;
+    case 'adminMode': adminMode = d.m; render(); break;
+    case 'wkShift': weekStart = ymd(addDays(parseYmd(weekStart), Number(d.n)*7));
+                    subscribeWeek(); render(); break;
+    case 'wkNow':   weekStart = startOfWeek(ymd(new Date())); subscribeWeek(); render(); break;
+    case 'wkDay':   selDate = d.d;
+                    if(page==='book') bookMode = 'day'; else adminMode = 'day';
+                    subscribeDay(); render(); break;
     case 'cancel':  confirmCancel(d.id); break;
     case 'dayShift':selDate = ymd(addDays(parseYmd(selDate), Number(d.n))); subscribeDay(); renderToday(); break;
     case 'dayToday':selDate = ymd(new Date()); subscribeDay(); renderToday(); break;
@@ -1228,6 +1423,15 @@ async function createMember({ name, phone, email, pw, lessonDay, lessonTime }){
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
+
+/* 분이 바뀌면 홈의 종료 안내와 현황의 '지금' 선을 다시 그린다 */
+let lastMinute = -1;
+setInterval(()=>{
+  const m = new Date().getMinutes();
+  if(m === lastMinute) return;
+  lastMinute = m;
+  if(ME && (page==='home' || page==='today')) render();
+}, 5000);
 </script>
 </body>
 </html>

@@ -55,9 +55,9 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 .clock{font-family:var(--f-head);font-size:4.7rem;line-height:1.05;text-align:right}
 
 /* 룸 카드 */
-.rooms{display:flex;gap:2.2rem;margin-top:1.9rem}
+.rooms{display:flex;gap:2.2rem;margin-top:1.5rem}
 .room{flex:1;border-radius:1.4rem;background:var(--surf);border:1px solid var(--line);
-  padding:1.7rem 2rem;display:flex;flex-direction:column;min-height:38vh}
+  padding:1.5rem 1.8rem;display:flex;flex-direction:column;min-height:23vh}
 .room.idle{background:var(--deep)}
 .room .top{display:flex;align-items:center}
 .rname{font-family:var(--f-head);font-size:2.2rem}
@@ -77,14 +77,41 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 .bar{height:.6rem;border-radius:.35rem;background:var(--ground);overflow:hidden}
 .bar i{display:block;height:100%;background:var(--red)}
 
-/* 다음 예약 */
-.next{margin-top:1.7rem;flex:1;display:flex;flex-direction:column;min-height:0}
-.nhead{display:flex;align-items:baseline;gap:.9rem;font-size:1.1rem;color:var(--dim)}
-.nlist{display:flex;gap:1rem;margin-top:.9rem;overflow:hidden}
-.nitem{min-width:18rem;padding:.95rem 1.25rem;border-radius:.85rem;background:var(--surf);
-  border:1px solid var(--line);border-left:3px solid var(--line)}
-.nitem .t{font-family:var(--f-head);font-size:1.45rem}
-.nitem .s{font-size:1rem;color:var(--dim);margin-top:.3rem}
+/* 종료 임박 안내 */
+.soon{margin-top:.9rem;display:inline-flex;align-items:center;gap:.6rem;
+  background:#4A1B15;border:1px solid #8A3A2E;color:#FFC9BE;
+  padding:.5rem 1rem;border-radius:.8rem;font-family:var(--f-head);font-size:1.25rem;
+  animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* 오늘 시간표 · 이번 주 */
+.sect{margin-top:1.5rem;min-height:0}
+.shead{display:flex;align-items:baseline;gap:.9rem;font-size:1.05rem;color:var(--dim);
+  margin-bottom:.6rem}
+.shead b{font-family:var(--f-head);font-size:1.2rem;color:var(--cream);font-weight:400}
+.trow{display:flex;align-items:center;gap:.8rem;margin-bottom:.4rem}
+.tname{width:6.2rem;flex:none;font-size:.95rem;text-align:right}
+.tbar{flex:1;display:flex;gap:2px;min-width:0}
+.tseg{flex:1;height:1.5rem;border-radius:.2rem;background:#16293D;min-width:0}
+.tseg.past{background:#101B27}
+.tseg.lesson{background:#C9A961}
+.tseg.block{background:#0E1A27;border:1px dashed #2E475F}
+.ticks{display:flex;margin-left:7rem;margin-top:.25rem}
+.ticks span{flex:1;font-size:.72rem;color:var(--mute);text-align:left}
+
+.sect.grow{flex:1;display:flex;flex-direction:column;min-height:0}
+.wk{flex:1;display:flex;flex-direction:column;gap:.3rem;min-height:0}
+.wrow{flex:1;min-height:1.1rem;display:flex;align-items:stretch;gap:.8rem}
+.wrow.today{background:rgba(200,70,58,.07);border-radius:.4rem}
+.wrow.today .wday{color:#E8705F}
+.wday{width:6.2rem;flex:none;font-size:.9rem;text-align:right;color:var(--dim);
+  align-self:center;padding-right:.2rem}
+.wbars{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;padding:1px 0}
+.wbar{flex:1;display:flex;gap:1px;min-height:0}
+.wseg{flex:1;border-radius:1px;background:#16293D;min-width:0}
+.wseg.past{background:#101B27}
+.wseg.lesson{background:#C9A961}
+.wseg.block{background:#0E1A27}
 
 /* 하단 */
 .ft{display:flex;align-items:center;border-top:1px solid var(--line-soft);padding-top:1rem}
@@ -116,12 +143,17 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
   .foot .l{font-size:.75rem}
   .foot .r{font-size:.95rem}
   .bar{height:5px;border-radius:3px}
-  .next{margin-top:18px;flex:none}
-  .nhead{font-size:.78rem;gap:8px}
-  .nlist{flex-direction:column;gap:8px;margin-top:8px;overflow:visible}
-  .nitem{min-width:0;padding:10px 12px;border-radius:10px}
-  .nitem .t{font-size:.95rem}
-  .nitem .s{font-size:.75rem}
+  .soon{font-size:.95rem;padding:7px 12px;margin-top:10px}
+  .sect{margin-top:18px}
+  .shead{font-size:.78rem;gap:8px;margin-bottom:6px}
+  .shead b{font-size:.9rem}
+  .tname,.wday{width:52px;font-size:.72rem}
+  .tseg{height:16px}
+  .ticks{margin-left:60px}
+  .ticks span{font-size:.6rem}
+  .sect.grow{flex:none}
+  .wrow{min-height:16px}
+  .wseg{min-height:6px}
   .ft{margin-top:20px;padding-top:12px;flex-wrap:wrap;gap:6px}
   .slogan{font-size:.85rem}
   .keys{font-size:.6rem;letter-spacing:.08rem}
@@ -168,9 +200,18 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 
   <div class="rooms" id="dRooms"></div>
 
-  <div class="next">
-    <div class="nhead"><span>오늘 남은 예약</span><span id="dCount" style="color:var(--mute)"></span></div>
-    <div class="nlist" id="dNext"></div>
+  <div class="sect">
+    <div class="shead"><b>오늘 시간표</b><span id="dCount"></span></div>
+    <div id="dToday"></div>
+  </div>
+
+  <div class="sect grow">
+    <div class="shead"><b>이번 주</b><span id="dWeekLabel"></span></div>
+    <div class="wk" id="dWeek"></div>
+    <div class="ticks">
+      <span>00</span><span>03</span><span>06</span><span>09</span>
+      <span>12</span><span>15</span><span>18</span><span>21</span>
+    </div>
   </div>
 
   <div class="ft">
@@ -206,13 +247,24 @@ const ROOMS = [
 ];
 
 let today = ymd(new Date());
-let items = [];
-let unsub = null;
+let items = [];        // 오늘 예약
+let weekItems = [];    // 이번 주 예약
+let weekStart = '';
+let unsub = null, unsubWeek = null;
 
 function ymd(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function parseYmd(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function pad(n){ return String(n).padStart(2,'0'); }
+function dow(d){ return ['일','월','화','수','목','금','토'][d.getDay()]; }
+function slotTime(s,h){ const d=parseYmd(s); d.setHours(h,0,0,0); return d; }
+/** 그 날짜가 속한 주의 월요일 */
+function startOfWeek(s){
+  const d = parseYmd(s), w = d.getDay();
+  return ymd(addDays(d, w===0 ? -6 : 1-w));
+}
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>(
   {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -233,16 +285,24 @@ onAuthStateChanged(auth, user=>{
   document.getElementById('scLogin').classList.toggle('hide', !!user);
   document.getElementById('scBoard').classList.toggle('hide', !user);
   if(user) subscribe();
-  else if(unsub){ unsub(); unsub = null; }
+  else { if(unsub){ unsub(); unsub=null; } if(unsubWeek){ unsubWeek(); unsubWeek=null; } }
 });
 
 /* ── 데이터 ── */
 function subscribe(){
   if(unsub) unsub();
+  if(unsubWeek) unsubWeek();
   today = ymd(new Date());
+  weekStart = startOfWeek(today);
+  const wEnd = ymd(addDays(parseYmd(weekStart), 6));
+
   unsub = onSnapshot(
     query(collection(db,'bookings'), where('date','==',today)),
     s=>{ items = s.docs.map(d=>d.data()); paint(); }
+  );
+  unsubWeek = onSnapshot(
+    query(collection(db,'bookings'), where('date','>=',weekStart), where('date','<=',wEnd)),
+    s=>{ weekItems = s.docs.map(d=>d.data()); paint(); }
   );
 }
 
@@ -265,13 +325,18 @@ function paint(){
       const pct  = Math.round(mins/60*100);
       const badge = blocked ? '사용 불가' : lesson ? '레슨 중' : '사용 중';
       const big   = blocked ? '닫혀 있어요' : lesson ? '레슨 중이에요' : '연습 중이에요';
+      // 뒤에 바로 다음 차례가 있을 때만 5분 전부터 재촉한다
+      const back2back = mine.find(x=>x.hour===h+1 && x.kind!=='block');
+      const soon = !blocked && back2back && left <= 5;
       return '<div class="room">'+
         '<div class="top"><div class="rname" style="color:'+r.color+'">'+r.name+'</div>'+
           '<div class="sp"></div>'+
           '<div class="badge '+(blocked?'idle':'live')+'">'+
             (blocked?'':'<span class="dot"></span>')+badge+'</div></div>'+
         '<div class="mid"><div class="who">'+big+'</div>'+
-          '<div class="when">'+pad(cur.hour)+':00 – '+pad(cur.hour+1)+':00</div></div>'+
+          '<div class="when">'+pad(cur.hour)+':00 – '+pad(cur.hour+1)+':00</div>'+
+          (soon ? '<div class="soon">'+left+'분 뒤 다음 차례 · 정리하고 나와 주세요</div>' : '')+
+        '</div>'+
         '<div><div class="foot"><span class="l">남은 시간</span>'+
           '<span class="r">'+left+'분</span></div>'+
           '<div class="bar"><i style="width:'+pct+'%"></i></div></div>'+
@@ -286,17 +351,61 @@ function paint(){
     '</div>';
   }).join('');
 
-  const rest = items.filter(x=>x.hour>h).sort((a,b)=>a.hour-b.hour);
-  document.getElementById('dCount').textContent = rest.length+'건';
-  document.getElementById('dNext').innerHTML = rest.length
-    ? rest.slice(0,4).map(x=>{
-        const r = ROOMS.find(y=>y.id===x.roomId) || ROOMS[0];
-        const what = x.kind==='block' ? '사용 불가' : x.kind==='lesson' ? '레슨' : '연습';
-        return '<div class="nitem" style="border-left-color:'+r.color+'">'+
-          '<div class="t">'+pad(x.hour)+':00 – '+pad(x.hour+1)+':00</div>'+
-          '<div class="s">'+what+' · '+r.name+'</div></div>';
-      }).join('')
-    : '<div class="nitem" style="color:var(--mute)">남은 예약이 없습니다</div>';
+  const rest = items.filter(x=>x.hour>h && x.kind!=='block');
+  document.getElementById('dCount').textContent = '남은 예약 '+rest.length+'건';
+
+  /* 오늘 — 연습실마다 24칸 막대 */
+  document.getElementById('dToday').innerHTML =
+    ROOMS.map(r=>{
+      const segs = [];
+      for(let i=0;i<24;i++){
+        const b = items.find(x=>x.roomId===r.id && x.hour===i);
+        let cls='tseg', style='';
+        if(b){
+          if(b.kind==='block')       cls+=' block';
+          else if(b.kind==='lesson') cls+=' lesson';
+          else                       style=' style="background:'+r.color+'"';
+        } else if(i < h) cls+=' past';
+        if(i === h && b) style=' style="background:'+(b.kind==='lesson'?'#C9A961':r.color)+
+                               ';box-shadow:0 0 0 2px var(--red)"';
+        segs.push('<i class="'+cls+'"'+style+'></i>');
+      }
+      return '<div class="trow"><div class="tname" style="color:'+r.color+'">'+r.name+'</div>'+
+        '<div class="tbar">'+segs.join('')+'</div></div>';
+    }).join('')+
+    '<div class="ticks">'+
+      [0,3,6,9,12,15,18,21].map(t=>'<span>'+pad(t)+'</span>').join('')+
+    '</div>';
+
+  /* 이번 주 — 날마다 두 줄 (위 블랙룸 · 아래 화이트룸) */
+  const wEnd = addDays(parseYmd(weekStart), 6);
+  document.getElementById('dWeekLabel').textContent =
+    (parseYmd(weekStart).getMonth()+1)+'월 '+parseYmd(weekStart).getDate()+'일 – '+
+    (wEnd.getMonth()+1)+'월 '+wEnd.getDate()+'일';
+
+  const rows = [];
+  for(let i=0;i<7;i++){
+    const d  = addDays(parseYmd(weekStart), i);
+    const ds = ymd(d);
+    const bars = ROOMS.map(r=>{
+      const segs = [];
+      for(let k=0;k<24;k++){
+        const b = weekItems.find(x=>x.roomId===r.id && x.date===ds && x.hour===k);
+        let cls='wseg', style='';
+        if(b){
+          if(b.kind==='block')       cls+=' block';
+          else if(b.kind==='lesson') cls+=' lesson';
+          else                       style=' style="background:'+r.color+'"';
+        } else if(slotTime(ds,k) <= now) cls+=' past';
+        segs.push('<i class="'+cls+'"'+style+'></i>');
+      }
+      return '<div class="wbar">'+segs.join('')+'</div>';
+    }).join('');
+    rows.push('<div class="wrow'+(ds===today?' today':'')+'">'+
+      '<div class="wday">'+dow(d)+' '+d.getDate()+'</div>'+
+      '<div class="wbars">'+bars+'</div></div>');
+  }
+  document.getElementById('dWeek').innerHTML = rows.join('');
 }
 
 /* ── 시계 / 자정 넘김 ── */
@@ -308,9 +417,14 @@ function tick(){
   document.getElementById('dClock').textContent = pad(now.getHours())+':'+pad(now.getMinutes());
   if(ymd(now) !== today && auth.currentUser) subscribe();   // 날짜가 바뀌면 다시 구독
 }
+/* 분이 바뀔 때마다 다시 그린다 — 5분 전 안내가 제때 뜨도록 */
+let lastMinute = -1;
 tick();
-setInterval(tick, 1000);
-setInterval(()=>{ if(auth.currentUser) paint(); }, 30000);  // 남은 시간 갱신
+setInterval(()=>{
+  tick();
+  const m = new Date().getMinutes();
+  if(m !== lastMinute){ lastMinute = m; if(auth.currentUser) paint(); }
+}, 1000);
 </script>
 </body>
 </html>
