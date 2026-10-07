@@ -3,10 +3,17 @@ rules_version = '2';
 // ──────────────────────────────────────────────────────────────
 // 리듬 하우스 연습실 예약 시스템 — Firestore 보안 규칙
 //
+// 로그인은 구글 계정으로만 합니다.
+// 회원 문서의 이름(ID)이 곧 소문자로 바꾼 구글 주소입니다.
+//   members/hong@gmail.com   ← 관리자가 미리 올려둔 사람만 들어올 수 있다
+//
 // 컬렉션 3개만 사용합니다.
-//   members   회원 정보 + 연습권
-//   bookings  예약 (문서 ID = 연습실_날짜_시  →  한 칸에 한 건만)
+//   members   회원 명단 + 연습권   (문서 ID = 이메일)
+//   bookings  예약                (문서 ID = 연습실_날짜_시 → 한 칸에 한 건만)
 //   lessons   레슨 완료 기록
+//
+// 예약 문서에는 이름도 이메일도 넣지 않고, 뜻 없는 식별자(mid)만 넣습니다.
+// 회원은 남의 회원 문서를 읽을 수 없으므로 서로가 누구인지 알 수 없습니다.
 // ──────────────────────────────────────────────────────────────
 
 service cloud.firestore {
@@ -14,17 +21,32 @@ service cloud.firestore {
 
     // ── 헬퍼 ──────────────────────────────────────────────
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
     }
 
-    function meDoc() {
-      return get(/databases/$(database)/documents/members/$(request.auth.uid)).data;
+    // 나를 가리키는 회원 문서의 이름 = 소문자로 바꾼 내 구글 주소
+    function myKey() {
+      return request.auth.token.email.lower();
+    }
+
+    function myDoc() {
+      return get(/databases/$(database)/documents/members/$(myKey())).data;
+    }
+
+    function registered() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/members/$(myKey()));
     }
 
     function isAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/members/$(request.auth.uid))
-        && meDoc().role == 'admin';
+      return registered() && myDoc().role == 'admin';
+    }
+
+    // 예약에 쓰는 내 식별자
+    function myMid() {
+      return myDoc().mid;
     }
 
     // 이번 수정으로 바뀐 필드가 keys 안에만 들어 있는지
@@ -32,19 +54,19 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
-    // ── 회원 ──────────────────────────────────────────────
-    match /members/{uid} {
+    // ── 회원 명단 ─────────────────────────────────────────
+    match /members/{email} {
 
-      // 본인 정보는 본인이, 전체 목록은 관리자만 읽는다
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      // 본인 문서는 본인이, 전체 명단은 관리자만 읽는다
+      allow read: if isAdmin() || (signedIn() && email == myKey());
 
-      // 등록·수정·삭제·연습권 지급은 관리자만
+      // 명단에 올리고 내리는 일, 연습권 지급은 관리자만
       allow create, update, delete: if isAdmin();
 
       // 예외: 본인은 예약·취소 트랜잭션에서 연습권만 조정할 수 있다.
       //       한 번에 1시간까지만 늘릴 수 있어 임의 충전은 불가능하다.
       allow update: if signedIn()
-        && request.auth.uid == uid
+        && email == myKey()
         && changedOnly(['credits', 'usedThisCycle'])
         && request.resource.data.credits is int
         && request.resource.data.credits >= 0
@@ -60,26 +82,26 @@ service cloud.firestore {
     // 두 사람이 같은 순간에 눌러도 먼저 도착한 쪽만 성공한다.
     match /bookings/{slotId} {
 
-      allow read: if signedIn();
+      allow read: if registered();
 
-      // 회원: 본인 이름의 연습 예약을 '생성'만 할 수 있다.
+      // 회원: 본인 몫의 연습 예약을 '생성'만 할 수 있다.
       // 레슨(lesson)과 차단(block)은 관리자만 만들 수 있다.
-      allow create: if signedIn()
-        && request.resource.data.memberId == request.auth.uid
+      allow create: if registered()
+        && request.resource.data.memberId == myMid()
         && request.resource.data.kind == 'practice';
 
       // 회원: 본인의 '연습' 예약만 취소할 수 있다 (레슨 일정은 못 지운다)
-      allow delete: if signedIn()
-        && resource.data.memberId == request.auth.uid
+      allow delete: if registered()
+        && resource.data.memberId == myMid()
         && resource.data.kind == 'practice';
 
-      // 관리자: 예약 추가·시간 차단·취소 모두 가능
+      // 관리자: 예약 추가·레슨 잡기·시간 닫기·취소 모두 가능
       allow create, update, delete: if isAdmin();
     }
 
     // ── 레슨 기록 ─────────────────────────────────────────
     match /lessons/{id} {
-      allow read: if signedIn();
+      allow read: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

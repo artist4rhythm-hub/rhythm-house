@@ -166,7 +166,7 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 .login .t{font-family:var(--f-logo);font-size:44px}
 .login input{width:280px;height:50px;border-radius:12px;border:1px solid var(--line);
   background:var(--surf);color:var(--cream);padding:0 16px;font-family:inherit;font-size:15px}
-.login button{width:280px;height:52px;border-radius:12px;background:var(--red);color:#FFF6EC;
+.login button{width:280px;height:52px;border-radius:12px;background:#FFFFFF;color:#1F2A36;
   border:0;font-family:var(--f-head);font-size:16px;cursor:pointer}
 .login .msg{font-size:13px;color:var(--mute);max-width:320px;text-align:center;line-height:1.7}
 .hide{display:none !important}
@@ -177,10 +177,8 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 <div class="login" id="scLogin">
   <img src="logo.png" alt="리듬 하우스">
   <div class="t">Rhythm House</div>
-  <div class="msg">현황판을 쓰려면 한 번만 로그인하세요.<br>이후에는 이 브라우저에서 자동으로 열립니다.</div>
-  <input id="em" type="email" placeholder="이메일" autocomplete="username">
-  <input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password">
-  <button id="go">로그인</button>
+  <div class="msg">현황판을 쓰려면 관리자 구글 계정으로 한 번만 로그인하세요.<br>이후에는 이 브라우저에서 자동으로 열립니다.</div>
+  <button id="go">Google 계정으로 로그인</button>
   <div class="msg" id="err"></div>
 </div>
 
@@ -223,7 +221,7 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged,
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged,
          setPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot }
@@ -269,16 +267,17 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>(
   {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ── 로그인 ── */
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt:'select_account' });
 document.getElementById('go').onclick = login;
-document.getElementById('pw').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 async function login(){
-  const e = document.getElementById('em').value.trim();
-  const p = document.getElementById('pw').value;
   try{
     await setPersistence(auth, browserLocalPersistence);
-    await signInWithEmailAndPassword(auth, e, p);
+    await signInWithPopup(auth, googleProvider);
   }catch(err){
-    document.getElementById('err').textContent = '로그인에 실패했어요. 다시 확인해 주세요.';
+    const c = err.code || '';
+    if(c.includes('popup-closed') || c.includes('cancelled-popup')) return;
+    document.getElementById('err').textContent = '로그인에 실패했어요. 다시 시도해 주세요.';
   }
 }
 onAuthStateChanged(auth, user=>{

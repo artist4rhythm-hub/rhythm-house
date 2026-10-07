@@ -100,6 +100,10 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
   font-family:var(--f-head);font-size:17px;width:100%;display:flex;
   align-items:center;justify-content:center;gap:8px}
 .cta[disabled]{background:var(--surf2);color:var(--mute)}
+.cta.google{background:#FFFFFF;color:#1F2A36;gap:11px}
+.cta.google[disabled]{background:#9AA7B4;color:#4A5663}
+.linkbtn{height:38px;color:var(--dim);font-size:13px;text-decoration:underline;
+  text-underline-offset:3px;width:100%}
 .btn{height:42px;padding:0 14px;border-radius:11px;border:1px solid var(--line);
   color:var(--dim);font-size:13px;display:inline-flex;align-items:center;justify-content:center}
 .btn.primary{background:var(--red);border-color:var(--red);color:#FFF6EC}
@@ -242,19 +246,22 @@ a{color:var(--red-l)}
       <div class="tag">연습실 예약</div>
     </div>
     <div class="col" style="margin-top:38px">
-      <div>
-        <label for="inEmail">이메일</label>
-        <input id="inEmail" type="email" autocomplete="username" placeholder="parent@gmail.com">
+      <button class="cta google" id="btnGoogle">
+        <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
+          <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.2-.4-4.7H24v8.9h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.2-3.8 6.6-9.5 6.6-16.3z"/>
+          <path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.2l-7.1-5.5c-2 1.3-4.5 2.1-7.5 2.1-5.7 0-10.6-3.9-12.3-9.1H4.3v5.7C7.9 41.1 15.4 46 24 46z"/>
+          <path fill="#FBBC05" d="M11.7 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-3 .7-4.3v-5.7H4.3A22 22 0 0 0 2 24c0 3.6.9 6.9 2.3 9.9l7.4-5.6z"/>
+          <path fill="#EA4335" d="M24 10.6c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4 29.9 2 24 2 15.4 2 7.9 6.9 4.3 14.1l7.4 5.7c1.7-5.2 6.6-9.2 12.3-9.2z"/>
+        </svg>
+        <span>Google 계정으로 로그인</span>
+      </button>
+      <div class="sub muted" style="text-align:center;font-size:12px;line-height:1.7">
+        리듬 하우스에 알려주신 구글 주소로 로그인됩니다.
       </div>
-      <div>
-        <label for="inPw">비밀번호</label>
-        <input id="inPw" type="password" autocomplete="current-password" placeholder="비밀번호">
-      </div>
-      <button class="cta" style="margin-top:6px" id="btnLogin">로그인</button>
     </div>
     <div class="card flat" style="margin-top:22px">
-      <div class="sub gold" style="margin-bottom:6px">계정 안내</div>
-      <div class="sub" style="line-height:1.7">계정은 리듬 하우스에서 발급해 드립니다.<br>이메일 주소를 알려주시면 등록해 드려요.</div>
+      <div class="sub gold" style="margin-bottom:6px">처음이신가요?</div>
+      <div class="sub" style="line-height:1.7">쓰시는 <b>구글 주소(Gmail)</b>를 리듬 하우스에 알려주세요.<br>등록해 드리면 바로 로그인하실 수 있어요.</div>
     </div>
   </div>
   <div class="foot">
@@ -273,16 +280,14 @@ a{color:var(--red-l)}
     <div class="card" style="margin-top:30px">
       <div class="h1" style="font-size:18px">아직 등록되지 않은 계정이에요</div>
       <p class="sub" style="margin-top:10px;line-height:1.7">
-        로그인은 되었지만 회원 정보가 없습니다.<br>관리자에게 아래 정보를 전달해 주세요.
+로그인은 되었지만 명단에 없는 주소입니다.<br>아래 주소를 리듬 하우스에 알려주시면 등록해 드려요.
       </p>
       <div class="card flat" style="margin-top:14px;padding:14px">
-        <div class="sub">이메일</div>
-        <div style="font-size:14px;margin-top:3px" id="pdEmail">—</div>
-        <div class="sub" style="margin-top:11px">사용자 UID</div>
-        <div style="font-size:12px;margin-top:3px;word-break:break-all" id="pdUid">—</div>
+        <div class="sub">로그인한 구글 주소</div>
+        <div style="font-size:15px;margin-top:4px;word-break:break-all" id="pdEmail">—</div>
       </div>
       <div class="row" style="margin-top:14px">
-        <button class="btn" id="btnCopyUid" style="flex:1">UID 복사</button>
+        <button class="btn" id="btnCopyUid" style="flex:1">주소 복사</button>
         <button class="btn" id="btnPendingOut" style="flex:1">로그아웃</button>
       </div>
     </div>
@@ -315,8 +320,9 @@ a{color:var(--red-l)}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-         signOut, onAuthStateChanged, setPersistence, browserLocalPersistence }
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
+         getRedirectResult, signOut, onAuthStateChanged,
+         setPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection,
          addDoc, query, where, onSnapshot, getDocs, runTransaction, serverTimestamp }
@@ -383,16 +389,28 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>(
   {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function isAdmin(){ return ME && ME.role === 'admin'; }
 
+/** 내 예약 식별자 — 이메일이 아니라 뜻 없는 문자열이라 남이 봐도 누구인지 모른다 */
+function myMid(){ return ME ? (ME.mid || ME.key) : ''; }
+/** 새 회원에게 줄 내부 식별자를 만든다 */
+function newMid(){
+  const s = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let out = '';
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  buf.forEach(n=>{ out += s[n % s.length]; });
+  return out;
+}
+
 /**
- * 예약 문서에는 회원 이름을 저장하지 않는다 (회원끼리 서로를 알 수 없도록).
+ * 예약 문서에는 회원 이름도 이메일도 저장하지 않는다 (회원끼리 서로를 알 수 없도록).
  * 관리자 화면에서만 회원 목록에서 이름을 찾아 보여준다.
  * memberName은 예전 버전으로 만들어진 예약을 위한 대비책이다.
  */
 function nameOf(b){
   if(!b) return '';
   if(b.kind === 'block') return '차단';
-  if(b.memberId && ME && b.memberId === ME.uid) return (ME.name || '나');
-  const m = members.find(x=>x.uid === b.memberId);
+  if(b.memberId && ME && b.memberId === myMid()) return (ME.name || '나');
+  const m = members.find(x=> (x.mid || x.key) === b.memberId);
   return (m && m.name) || b.memberName || '예약';
 }
 
@@ -438,29 +456,53 @@ function info({ title, body }){
 }
 
 /* ===================== 로그인 ===================== */
-document.getElementById('btnLogin').onclick = doLogin;
-document.getElementById('inPw').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+/**
+ * 로그인은 구글 계정 하나뿐이다.
+ * 관리자가 회원의 구글 주소를 명단에 올려두면 그 주소로 들어온 사람만 통과한다.
+ * 비밀번호 로그인을 열어두면 아무나 남의 주소로 계정을 만들 수 있어 쓰지 않는다.
+ */
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt:'select_account' });
 
-async function doLogin(){
-  const email = document.getElementById('inEmail').value.trim();
-  const pw    = document.getElementById('inPw').value;
-  if(!email || !pw){ toast('이메일과 비밀번호를 입력해 주세요'); return; }
+document.getElementById('btnGoogle').onclick = googleLogin;
+/** 홈 화면에 설치된 앱으로 열렸는지 */
+function standalone(){
+  return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+}
+async function googleLogin(){
+  const btn = document.getElementById('btnGoogle');
+  btn.disabled = true;
   try{
     await setPersistence(auth, browserLocalPersistence);
-    await signInWithEmailAndPassword(auth, email, pw);
+    // 홈 화면 앱에서는 팝업이 막히는 기기가 많아 같은 창에서 처리한다
+    if(standalone()){ await signInWithRedirect(auth, googleProvider); return; }
+    await signInWithPopup(auth, googleProvider);
   }catch(e){
     const c = e.code || '';
-    if(c.includes('invalid-credential') || c.includes('wrong-password') || c.includes('user-not-found'))
-      toast('이메일 또는 비밀번호가 맞지 않아요');
-    else if(c.includes('too-many-requests')) toast('잠시 후 다시 시도해 주세요');
-    else toast('로그인에 실패했어요');
-  }
+    if(c.includes('popup-closed') || c.includes('cancelled-popup')) { /* 사용자가 닫음 */ }
+    else if(c.includes('popup-blocked')){
+      // 홈 화면 앱 등 팝업이 막히는 환경에서는 같은 창에서 처리한다
+      try{ await signInWithRedirect(auth, googleProvider); return; }
+      catch(_){ toast('구글 로그인 창을 열 수 없어요'); }
+    }
+    else if(c.includes('account-exists-with-different-credential'))
+      toast('같은 주소의 다른 로그인 방식이 있어요. 관리자에게 알려주세요');
+    else if(c.includes('network')) toast('인터넷 연결을 확인해 주세요');
+    else toast('구글 로그인에 실패했어요');
+  }finally{ btn.disabled = false; }
 }
+// 리다이렉트로 돌아온 경우 처리
+getRedirectResult(auth).catch(e=>{
+  const c = e.code || '';
+  if(c && !c.includes('no-auth-event')) toast('구글 로그인에 실패했어요');
+});
+
 document.getElementById('btnLogout').onclick = ()=> signOut(auth);
 document.getElementById('btnPendingOut').onclick = ()=> signOut(auth);
 document.getElementById('btnCopyUid').onclick = ()=>{
-  const t = document.getElementById('pdUid').textContent;
-  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast('UID를 복사했어요'));
+  const t = document.getElementById('pdEmail').textContent;
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>toast('이메일을 복사했어요'));
   else toast(t);
 };
 
@@ -475,18 +517,27 @@ onAuthStateChanged(auth, async (user)=>{
 
   if(!user){ ME=null; show('scLogin'); return; }
 
+  // 회원 문서의 이름(ID)은 소문자로 바꾼 이메일이다. 구글 계정이 곧 열쇠다.
+  const key = (user.email || '').trim().toLowerCase();
   let snap;
-  try{ snap = await getDoc(doc(db,'members',user.uid)); }
+  if(!key){ toast('이메일을 확인할 수 없는 계정이에요'); signOut(auth); return; }
+  try{ snap = await getDoc(doc(db,'members',key)); }
   catch(e){ toast('회원 정보를 불러오지 못했어요'); show('scLogin'); return; }
 
   if(!snap.exists() || snap.data().active === false){
     document.getElementById('pdEmail').textContent = user.email || '—';
-    document.getElementById('pdUid').textContent   = user.uid;
     show('scPending');
     return;
   }
 
-  ME = { uid:user.uid, ...snap.data() };
+  ME = { key, uid:user.uid, ...snap.data() };
+
+  // 관리자 문서에 내부 식별자가 없으면 한 번만 만들어 둔다 (손으로 넣을 필요 없게)
+  if(ME.role === 'admin' && !ME.mid){
+    const mid = newMid();
+    try{ await updateDoc(doc(db,'members',key), { mid }); ME.mid = mid; }catch(_){}
+  }
+
   show('scApp');
   document.getElementById('tagAdmin').classList.toggle('hide', !isAdmin());
   buildNav();
@@ -496,14 +547,14 @@ onAuthStateChanged(auth, async (user)=>{
   go(isAdmin() ? 'today' : 'home');
 
   // 내 정보 실시간 구독 (연습권 변화 즉시 반영)
-  unsubMe = onSnapshot(doc(db,'members',user.uid), s=>{
+  unsubMe = onSnapshot(doc(db,'members',key), s=>{
     if(!s.exists()) return;
-    ME = { uid:user.uid, ...s.data() };
+    ME = { key, uid:user.uid, ...s.data() };
     render();
   });
-  // 내 예약 실시간 구독
+  // 내 예약 실시간 구독 — 예약에는 이메일이 아니라 내부 식별자(mid)만 쓴다
   unsubMine = onSnapshot(
-    query(collection(db,'bookings'), where('memberId','==',user.uid)),
+    query(collection(db,'bookings'), where('memberId','==', ME.mid || key)),
     s=>{
       myBookings = s.docs.map(d=>({ id:d.id, ...d.data() }))
         .sort((a,b)=> (a.date+pad(a.hour)).localeCompare(b.date+pad(b.hour)));
@@ -584,7 +635,7 @@ function subscribeWeek(){
 function subscribeMembers(){
   if(!isAdmin() || unsubMembers) return;
   unsubMembers = onSnapshot(collection(db,'members'), s=>{
-    members = s.docs.map(d=>({ uid:d.id, ...d.data() }))
+    members = s.docs.map(d=>({ key:d.id, ...d.data() }))
       .sort((a,b)=> (a.name||'').localeCompare(b.name||'','ko'));
     if(page==='members') renderMembers();
   });
@@ -715,7 +766,7 @@ function weekGrid(){
         if(b){
           if(b.kind==='block')          cls += ' block';
           else if(b.kind==='lesson')    cls += ' lesson';
-          else if(b.memberId===ME.uid)  cls += ' mine';
+          else if(b.memberId===myMid())  cls += ' mine';
           else                          cls += ' taken';
         } else if(slotTime(x.s,h) <= now) cls += ' past';
         return '<i class="'+cls+'"></i>';
@@ -782,11 +833,11 @@ function bookDayHTML(){
       // 회원에게는 누구인지 보이지 않는다. 쓸 수 없다는 것만 분명히 보여준다.
       if(b.kind==='block'){       cls+=' blocked'; st='사용 불가'; }
       else if(b.kind==='lesson'){ cls+=' lesson';  st = admin ? esc(nameOf(b))+' 레슨' : '레슨'; }
-      else if(b.memberId===ME.uid){ cls+=' mine';  st='내 예약'; }
+      else if(b.memberId===myMid()){ cls+=' mine';  st='내 예약'; }
       else {                      cls+=' taken';   st = admin ? esc(nameOf(b)) : '예약 완료'; }
 
       if(admin) attr = ' data-act="admCancel" data-id="'+b.id+'"';
-      else if(b.memberId===ME.uid && b.kind!=='lesson')
+      else if(b.memberId===myMid() && b.kind!=='lesson')
                 attr = ' data-act="cancel" data-id="'+b.id+'"';
       else      attr = ' data-act="why" data-w="'+(b.kind==='block'?'block':b.kind==='lesson'?'lesson':'taken')+'"';
     }
@@ -935,7 +986,7 @@ function stat(n,label,color){
 
 /* ===================== 관리자 · 회원 관리 ===================== */
 function renderMembers(){
-  const list = members.filter(m=>m.role!=='admin' || m.uid===ME.uid);
+  const list = members.filter(m=>m.role!=='admin' || m.key===ME.key);
   document.getElementById('pgMembers').innerHTML =
     '<div class="row"><div class="h1" style="font-size:19px">회원 관리</div><div class="spacer"></div>'+
       '<button class="btn sm primary" data-act="addMember">＋ 회원 추가</button></div>'+
@@ -973,8 +1024,8 @@ function memberCard(m){
     '<div class="row" style="gap:5px;margin-top:9px">'+dots.join('')+'</div>'+
     '<div class="sub muted" style="margin-top:7px;font-size:11px">이번 주기 '+used+' / '+total+'시간 사용</div>'+
     '<div class="row" style="gap:8px;margin-top:13px">'+
-      '<button class="btn primary" style="flex:1;height:42px" data-act="lesson" data-uid="'+m.uid+'">레슨 완료 · 연습권 지급</button>'+
-      '<button class="btn" style="height:42px" data-act="editMember" data-uid="'+m.uid+'">설정</button>'+
+      '<button class="btn primary" style="flex:1;height:42px" data-act="lesson" data-key="'+m.key+'">레슨 완료 · 연습권 지급</button>'+
+      '<button class="btn" style="height:42px" data-act="editMember" data-key="'+m.key+'">설정</button>'+
     '</div></div>';
 }
 
@@ -1005,9 +1056,9 @@ async function handle(d){
     case 'admSlot': admSlot(d.r, Number(d.h)); break;
     case 'admCancel': admCancel(d.id); break;
     case 'blockMode': go('today'); toast('빈 칸을 누르면 차단할 수 있어요'); break;
-    case 'lesson':  confirmLesson(d.uid); break;
+    case 'lesson':  confirmLesson(d.key); break;
     case 'addMember': formMember(null); break;
-    case 'editMember': formMember(members.find(m=>m.uid===d.uid)); break;
+    case 'editMember': formMember(members.find(m=>m.key===d.key)); break;
   }
 }
 
@@ -1050,7 +1101,7 @@ async function doBook(hour){
   try{
     await runTransaction(db, async tx=>{
       const bRef = doc(db,'bookings',id);
-      const mRef = doc(db,'members',ME.uid);
+      const mRef = doc(db,'members',ME.key);
       const bSnap = await tx.get(bRef);
       if(bSnap.exists()) throw new Error('TAKEN');
 
@@ -1066,7 +1117,7 @@ async function doBook(hour){
       // 이름은 저장하지 않는다 — 회원끼리 서로를 알 수 없게 하기 위해서다
       tx.set(bRef, {
         roomId: selRoom, roomName: r.name, date: selDate, hour,
-        memberId: ME.uid, kind:'practice',
+        memberId: myMid(), kind:'practice',
         addedByAdmin: admin, createdAt: serverTimestamp()
       });
       if(!admin){
@@ -1108,7 +1159,7 @@ async function doCancel(b){
   try{
     await runTransaction(db, async tx=>{
       const bRef = doc(db,'bookings',b.id);
-      const mRef = doc(db,'members',ME.uid);
+      const mRef = doc(db,'members',ME.key);
       const bSnap = await tx.get(bRef);
       if(!bSnap.exists()) throw new Error('GONE');
       let m = null;
@@ -1136,7 +1187,7 @@ function admSlot(roomId, hour){
   const r = roomOf(roomId);
   const taken = dayBookings.some(b=>b.roomId===roomId && b.hour===hour);
   const opts = members.filter(m=>m.role!=='admin').map(m=>
-    '<option value="'+m.uid+'">'+esc(m.name||m.email)+'</option>').join('');
+    '<option value="'+(m.mid||m.key)+'">'+esc(m.name||m.email)+'</option>').join('');
   const host = document.getElementById('modalHost');
   host.innerHTML =
     '<div class="overlay"><div class="modal">'+
@@ -1165,7 +1216,7 @@ function admSlot(roomId, hour){
 
   host.querySelector('#admMine').onclick = async ()=>{
     closeModal();
-    await writeSlot(roomId, hour, { kind:'practice', memberId: ME.uid });
+    await writeSlot(roomId, hour, { kind:'practice', memberId: myMid() });
     toast('연습실을 잡았어요');
   };
   host.querySelector('#admBlock').onclick = async ()=>{
@@ -1174,16 +1225,16 @@ function admSlot(roomId, hour){
     toast('이 시간을 닫았어요');
   };
   host.querySelector('#admAdd').onclick = async ()=>{
-    const uid = host.querySelector('#admWho').value;
-    if(!uid){ toast('회원을 선택해 주세요'); return; }
+    const mid = host.querySelector('#admWho').value;
+    if(!mid){ toast('회원을 선택해 주세요'); return; }
     closeModal();
-    await writeSlot(roomId, hour, { kind:'practice', memberId:uid });
+    await writeSlot(roomId, hour, { kind:'practice', memberId:mid });
     toast('예약을 추가했어요');
   };
   host.querySelector('#admLesson').onclick = async ()=>{
-    const uid = host.querySelector('#admWho').value;
+    const mid = host.querySelector('#admWho').value;
     closeModal();
-    await writeSlot(roomId, hour, { kind:'lesson', memberId: uid || ME.uid });
+    await writeSlot(roomId, hour, { kind:'lesson', memberId: mid || myMid() });
     toast('레슨 일정을 잡았어요');
   };
 }
@@ -1212,7 +1263,9 @@ function admCancel(id){
       try{
         if(b.kind==='practice' && b.memberId && !b.addedByAdmin){
           await runTransaction(db, async tx=>{
-            const mRef = doc(db,'members',b.memberId);
+            const target = members.find(x=>(x.mid||x.key)===b.memberId);
+            if(!target) throw new Error('NOMEMBER');
+            const mRef = doc(db,'members',target.key);
             const mSnap = await tx.get(mRef);
             tx.delete(doc(db,'bookings',b.id));
             if(mSnap.exists()){
@@ -1275,8 +1328,8 @@ function nextTier(m){
   return { next, base, streak, note, used };
 }
 
-function confirmLesson(uid){
-  const m = members.find(x=>x.uid===uid);
+function confirmLesson(key){
+  const m = members.find(x=>x.key===key);
   if(!m) return;
   const t = nextTier(m);
   ask({
@@ -1293,7 +1346,7 @@ async function grantLesson(m, t){
   const month = now.getFullYear()+'-'+pad(now.getMonth()+1);
   const sameMonth = m.lessonMonth === month;
   try{
-    await updateDoc(doc(db,'members',m.uid), {
+    await updateDoc(doc(db,'members',m.key), {
       credits: t.next,
       weeklyHours: t.next,
       usedThisCycle: 0,
@@ -1306,7 +1359,7 @@ async function grantLesson(m, t){
       lastLessonAt: serverTimestamp()
     });
     await addDoc(collection(db,'lessons'), {
-      memberId: m.uid, memberName: m.name||'',
+      memberId: (m.mid||m.key), memberName: m.name||'',
       date: ymd(now), grantedHours: t.next, usedBefore: t.used,
       note: t.note, createdAt: serverTimestamp()
     });
@@ -1329,9 +1382,12 @@ function formMember(m){
         '<div><label for="fmName">이름</label><input id="fmName" value="'+esc(m?m.name:'')+'"></div>'+
         '<div><label for="fmPhone">연락처</label><input id="fmPhone" value="'+esc(m?m.phone:'')+'" placeholder="010-0000-0000"></div>'+
         (isNew
-          ? '<div><label for="fmEmail">이메일 (로그인 ID)</label><input id="fmEmail" type="email" placeholder="parent@gmail.com"></div>'+
-            '<div><label for="fmPw">임시 비밀번호</label><input id="fmPw" value="rhythm1234"></div>'
-          : '<div><label>이메일</label><div class="sub" style="padding:6px 0">'+esc(m.email||'—')+'</div></div>')+
+          ? '<div><label for="fmEmail">구글 주소 (로그인에 쓰는 Gmail)</label>'+
+            '<input id="fmEmail" type="email" inputmode="email" autocapitalize="off" '+
+            'spellcheck="false" placeholder="parent@gmail.com"></div>'+
+            '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
+            '이 주소로 구글 로그인한 분만 들어올 수 있어요.<br>비밀번호는 따로 만들지 않습니다.</div>'
+          : '<div><label>구글 주소</label><div class="sub" style="padding:6px 0">'+esc(m.email||'—')+'</div></div>')+
         '<div class="row" style="gap:9px">'+
           '<div style="flex:1"><label for="fmDay">레슨 요일</label><select id="fmDay">'+
             '<option value="">미등록</option>'+
@@ -1353,9 +1409,9 @@ function formMember(m){
   if(!isNew) host.querySelector('#fmDel').onclick = ()=>{
     closeModal();
     ask({ title:'회원을 삭제할까요?',
-      body: esc(m.name||'')+'님의 회원 정보가 삭제됩니다.<br>로그인 계정과 예약 기록은 남습니다.',
+      body: esc(m.name||'')+'님을 명단에서 지웁니다.<br>이 주소로는 더 이상 로그인할 수 없게 됩니다.<br>지난 예약 기록은 남습니다.',
       ok:'삭제', onOk: async ()=>{
-        try{ await deleteDoc(doc(db,'members',m.uid)); toast('삭제했어요'); }
+        try{ await deleteDoc(doc(db,'members',m.key)); toast('삭제했어요'); }
         catch(e){ toast('삭제에 실패했어요'); }
       }});
   };
@@ -1371,16 +1427,16 @@ function formMember(m){
       lessonTime: time || null
     };
     if(isNew){
-      const email = host.querySelector('#fmEmail').value.trim();
-      const pw    = host.querySelector('#fmPw').value;
-      if(!email || pw.length < 6){ toast('이메일과 6자 이상 비밀번호가 필요해요'); return; }
+      const email = host.querySelector('#fmEmail').value.trim().toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast('구글 주소를 정확히 입력해 주세요'); return; }
+      if(members.some(x=>x.key===email)){ toast('이미 등록된 주소예요'); return; }
       closeModal();
-      await createMember({ ...patch, email, pw });
+      await createMember({ ...patch, email });
     } else {
       const credit = Number(host.querySelector('#fmCredit').value);
       closeModal();
       try{
-        await updateDoc(doc(db,'members',m.uid), {
+        await updateDoc(doc(db,'members',m.key), {
           ...patch,
           credits: isNaN(credit) ? (m.credits||0) : Math.max(0,credit)
         });
@@ -1390,33 +1446,28 @@ function formMember(m){
   };
 }
 
-/** 관리자 세션을 유지한 채 새 계정을 만든다 (보조 앱 사용) */
-async function createMember({ name, phone, email, pw, lessonDay, lessonTime }){
-  let secondary;
+/**
+ * 회원 등록 = 구글 주소를 명단에 올리는 일이다.
+ * 비밀번호를 만들지 않으므로 관리자 로그인이 풀릴 일도 없다.
+ * 문서 이름(ID)이 곧 소문자로 바꾼 이메일이다.
+ */
+async function createMember({ name, phone, email, lessonDay, lessonTime }){
   try{
-    secondary = initializeApp(firebaseConfig, 'rh-create-'+Date.now());
-    const sAuth = getAuth(secondary);
-    const cred  = await createUserWithEmailAndPassword(sAuth, email, pw);
-    await setDoc(doc(db,'members',cred.user.uid), {
+    await setDoc(doc(db,'members', email), {
+      mid: newMid(),
       name, phone, email, role:'member', active:true,
       lessonDay: lessonDay==null?null:lessonDay, lessonTime: lessonTime||null,
       credits:0, weeklyHours:TIER_BASE, usedThisCycle:0,
       baseHours:TIER_BASE, fullStreak:0, cycles:0,
       expiresAt:null, lessonsThisMonth:0, createdAt: serverTimestamp()
     });
-    await signOut(sAuth);
     info({ title:'회원을 등록했어요',
       body: esc(name)+'님<br><br>'+
-            '이메일 <b>'+esc(email)+'</b><br>비밀번호 <b>'+esc(pw)+'</b><br><br>'+
-            '<span class="muted">이 정보와 사이트 주소를 전달해 주세요.<br>'+
+            '등록한 구글 주소<br><b>'+esc(email)+'</b><br><br>'+
+            '<span class="muted">사이트 주소를 보내 주시고, 들어가서 '+
+            '<b>Google 계정으로 로그인</b>을 누르시면 됩니다.<br>'+
             '첫 레슨을 마치면 연습권이 지급됩니다.</span>' });
-  }catch(e){
-    const c = e.code||'';
-    if(c.includes('email-already-in-use')) toast('이미 사용 중인 이메일이에요');
-    else if(c.includes('invalid-email')) toast('이메일 형식을 확인해 주세요');
-    else if(c.includes('weak-password')) toast('비밀번호는 6자 이상이어야 해요');
-    else { console.error(e); toast('등록에 실패했어요'); }
-  }
+  }catch(e){ console.error(e); toast('등록에 실패했어요'); }
 }
 
 /* ===================== 서비스 워커 ===================== */
