@@ -270,15 +270,14 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>(
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt:'select_account' });
 document.getElementById('go').onclick = login;
-async function login(){
-  try{
-    await setPersistence(auth, browserLocalPersistence);
-    await signInWithPopup(auth, googleProvider);
-  }catch(err){
+// 버튼을 누른 뒤 await를 걸면 사파리가 팝업을 막는다. 미리 설정해 둔다.
+setPersistence(auth, browserLocalPersistence).catch(()=>{});
+function login(){
+  signInWithPopup(auth, googleProvider).catch(err=>{
     const c = err.code || '';
     if(c.includes('popup-closed') || c.includes('cancelled-popup')) return;
-    document.getElementById('err').textContent = '로그인에 실패했어요. 다시 시도해 주세요.';
-  }
+    document.getElementById('err').textContent = '로그인에 실패했어요 · '+(c||'다시 시도해 주세요');
+  });
 }
 onAuthStateChanged(auth, user=>{
   document.getElementById('scLogin').classList.toggle('hide', !!user);

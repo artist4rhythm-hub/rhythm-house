@@ -519,39 +519,64 @@ function info({ title, body }){
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt:'select_account' });
 
+// 로그인 유지 설정은 미리 해둔다.
+// 버튼을 누른 뒤에 await를 걸면 '사용자가 누른 흐름'이 끊겨서
+// 아이폰 사파리가 팝업을 막아버린다. PC 크롬은 너그러워 티가 안 난다.
+setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
 document.getElementById('btnGoogle').onclick = googleLogin;
+
 /** 홈 화면에 설치된 앱으로 열렸는지 */
 function standalone(){
   return window.matchMedia('(display-mode: standalone)').matches
       || window.navigator.standalone === true;
 }
-async function googleLogin(){
+
+function googleLogin(){
   const btn = document.getElementById('btnGoogle');
   btn.disabled = true;
-  try{
-    await setPersistence(auth, browserLocalPersistence);
-    // 홈 화면 앱에서는 팝업이 막히는 기기가 많아 같은 창에서 처리한다
-    if(standalone()){ await signInWithRedirect(auth, googleProvider); return; }
-    await signInWithPopup(auth, googleProvider);
-  }catch(e){
-    const c = e.code || '';
-    if(c.includes('popup-closed') || c.includes('cancelled-popup')) { /* 사용자가 닫음 */ }
-    else if(c.includes('popup-blocked')){
-      // 홈 화면 앱 등 팝업이 막히는 환경에서는 같은 창에서 처리한다
-      try{ await signInWithRedirect(auth, googleProvider); return; }
-      catch(_){ toast('구글 로그인 창을 열 수 없어요'); }
-    }
-    else if(c.includes('account-exists-with-different-credential'))
-      toast('같은 주소의 다른 로그인 방식이 있어요. 관리자에게 알려주세요');
-    else if(c.includes('network')) toast('인터넷 연결을 확인해 주세요');
-    else toast('구글 로그인에 실패했어요');
-  }finally{ btn.disabled = false; }
+  // 누른 즉시 연다 — 앞에 await를 두지 않는다
+  signInWithPopup(auth, googleProvider)
+    .catch(e=>{
+      const c = e.code || '';
+      if(c.includes('popup-closed') || c.includes('cancelled-popup')) return;   // 사용자가 닫음
+      if(c.includes('account-exists-with-different-credential')){
+        toast('같은 주소의 다른 로그인 방식이 있어요'); return;
+      }
+      if(c.includes('network')){ toast('인터넷 연결을 확인해 주세요'); return; }
+      // 팝업이 아예 막힌 기기에서는 같은 창에서 처리한다
+      try{ sessionStorage.setItem('rh-redirect','1'); }catch(_){}
+      signInWithRedirect(auth, googleProvider)
+        .catch(()=> toast('구글 로그인을 열 수 없어요 · '+(c||'알 수 없는 오류')));
+    })
+    .finally(()=>{ btn.disabled = false; });
 }
+
 // 리다이렉트로 돌아온 경우 처리
-getRedirectResult(auth).catch(e=>{
-  const c = e.code || '';
-  if(c && !c.includes('no-auth-event')) toast('구글 로그인에 실패했어요');
-});
+getRedirectResult(auth)
+  .then(res=>{ if(res) { try{ sessionStorage.removeItem('rh-redirect'); }catch(_){} } })
+  .catch(e=>{
+    try{ sessionStorage.removeItem('rh-redirect'); }catch(_){}
+    const c = e.code || '';
+    if(c && !c.includes('no-auth-event')) toast('구글 로그인 실패 · '+c);
+  });
+
+/**
+ * 같은 창 방식으로 다녀왔는데 로그인이 안 된 채 돌아온 경우를 알려준다.
+ * 조용히 로그인 화면으로 되돌아가면 왜 안 되는지 알 수가 없다.
+ */
+function warnRedirectFailed(){
+  let flag = null;
+  try{ flag = sessionStorage.getItem('rh-redirect'); }catch(_){}
+  if(!flag) return;
+  try{ sessionStorage.removeItem('rh-redirect'); }catch(_){}
+  setTimeout(()=> info({
+    title:'로그인이 끝나지 않았어요',
+    body:'구글 인증은 됐는데 앱으로 돌아오면서 끊겼습니다.<br><br>'+
+         '<b>사파리(인터넷 브라우저)에서 주소를 직접 열어</b> 로그인해 보세요.<br>'+
+         '홈 화면 아이콘으로 여는 앱에서는 이 방식이 막히는 기기가 있습니다.'
+  }), 400);
+}
 
 document.getElementById('btnLogout').onclick = ()=> signOut(auth);
 document.getElementById('btnPendingOut').onclick = ()=> signOut(auth);
@@ -572,7 +597,7 @@ onAuthStateChanged(auth, async (user)=>{
   unsubDay = unsubWeek = unsubMine = unsubMe = unsubMembers = null;
   unsubMyLessons = unsubMbLessons = unsubMbBookings = unsubAllLessons = null;
 
-  if(!user){ ME=null; show('scLogin'); return; }
+  if(!user){ ME=null; show('scLogin'); warnRedirectFailed(); return; }
 
   // 회원 문서의 이름(ID)은 소문자로 바꾼 이메일이다. 구글 계정이 곧 열쇠다.
   const key = (user.email || '').trim().toLowerCase();
