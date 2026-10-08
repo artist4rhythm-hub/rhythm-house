@@ -129,7 +129,7 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--cream)}
 .slot .hr{font-family:var(--f-head);font-size:16px;line-height:1}
 .slot .st{font-size:9px;opacity:.8}
-.slot.taken{background:#16293D;border-color:#20364E;color:var(--mute)}
+.slot.taken{background:#0D1826;border-color:#1A2A3C;color:#5E7389}
 .slot.mine{background:var(--red);border-color:var(--red);color:#FFF6EC}
 .slot.lesson{background:#2B2518;border-color:#8A7442;color:#E3CFA6}
 .slot.blocked{background:transparent;border-style:dashed;border-color:#3A5570;color:var(--mute)}
@@ -742,6 +742,7 @@ function bookingCard(b){
  * 회원 화면에서는 누구 예약인지 구분하지 않고 '예약됨'으로만 칠한다.
  */
 function weekGrid(){
+  const admin  = isAdmin();
   const todayS = ymd(new Date());
   const now = new Date();
   const days = [];
@@ -764,10 +765,17 @@ function weekGrid(){
         const b = weekBookings.find(y=>y.roomId===r.id && y.date===x.s && y.hour===h);
         let cls = 'wc';
         if(b){
-          if(b.kind==='block')          cls += ' block';
-          else if(b.kind==='lesson')    cls += ' lesson';
-          else if(b.memberId===myMid())  cls += ' mine';
-          else                          cls += ' taken';
+          const isMine = b.memberId === myMid();
+          if(admin){
+            if(b.kind==='block')       cls += ' block';
+            else if(b.kind==='lesson') cls += ' lesson';
+            else if(isMine)            cls += ' mine';
+            else                       cls += ' taken';
+          }
+          // 회원에게는 내 것만 구분되고 나머지는 전부 한 가지 '사용 불가'다
+          else if(isMine && b.kind==='practice') cls += ' mine';
+          else if(isMine && b.kind==='lesson')   cls += ' lesson';
+          else                                   cls += ' taken';
         } else if(slotTime(x.s,h) <= now) cls += ' past';
         return '<i class="'+cls+'"></i>';
       }).join('');
@@ -782,9 +790,9 @@ function weekGrid(){
     '<div class="wklegend">'+
       '<span><i style="background:#17293C"></i>가능</span>'+
       '<span><i style="background:var(--red)"></i>내 예약</span>'+
-      '<span><i style="background:#3A5A80"></i>예약됨</span>'+
-      '<span><i style="background:#8A7442"></i>레슨</span>'+
-      '<span><i style="background:#101C29;border:1px dashed #334B66"></i>사용 불가</span>'+
+      '<span><i style="background:#8A7442"></i>'+(admin?'레슨':'내 레슨')+'</span>'+
+      '<span><i style="background:#3A5A80"></i>'+(admin?'예약됨':'사용 불가')+'</span>'+
+      (admin ? '<span><i style="background:#101C29;border:1px dashed #334B66"></i>닫은 시간</span>' : '')+
     '</div>';
 }
 function weekNav(){
@@ -830,16 +838,29 @@ function bookDayHTML(){
     let cls='slot', st='가능', attr='';
 
     if(b){
-      // 회원에게는 누구인지 보이지 않는다. 쓸 수 없다는 것만 분명히 보여준다.
-      if(b.kind==='block'){       cls+=' blocked'; st='사용 불가'; }
-      else if(b.kind==='lesson'){ cls+=' lesson';  st = admin ? esc(nameOf(b))+' 레슨' : '레슨'; }
-      else if(b.memberId===myMid()){ cls+=' mine';  st='내 예약'; }
-      else {                      cls+=' taken';   st = admin ? esc(nameOf(b)) : '예약 완료'; }
-
-      if(admin) attr = ' data-act="admCancel" data-id="'+b.id+'"';
-      else if(b.memberId===myMid() && b.kind!=='lesson')
-                attr = ' data-act="cancel" data-id="'+b.id+'"';
-      else      attr = ' data-act="why" data-w="'+(b.kind==='block'?'block':b.kind==='lesson'?'lesson':'taken')+'"';
+      const isMine = b.memberId === myMid();
+      if(admin){
+        // 관리자는 왜 막혔는지 다 보여야 운영이 된다
+        if(b.kind==='block'){       cls+=' blocked'; st='사용 불가'; }
+        else if(b.kind==='lesson'){ cls+=' lesson';  st = esc(nameOf(b))+' 레슨'; }
+        else if(isMine){            cls+=' mine';    st='내 예약'; }
+        else {                      cls+=' taken';   st = esc(nameOf(b)); }
+        attr = ' data-act="admCancel" data-id="'+b.id+'"';
+      }
+      else if(isMine && b.kind==='practice'){
+        cls+=' mine'; st='내 예약';
+        attr = ' data-act="cancel" data-id="'+b.id+'"';
+      }
+      else if(isMine && b.kind==='lesson'){
+        cls+=' lesson'; st='내 레슨';
+        attr = ' data-act="why" data-w="mylesson"';
+      }
+      else {
+        // 남의 예약이든 남의 레슨이든 닫아둔 시간이든 회원에게는 모두 똑같다.
+        // 누가 왜 막았는지는 알 필요도 없고 알아서도 안 된다.
+        cls+=' taken'; st='사용 불가';
+        attr = ' data-act="why" data-w="taken"';
+      }
     }
     else if(past){ cls+=' past'; st='지난 시간'; }
     else { attr = ' data-act="book" data-h="'+h+'"'; }
@@ -860,15 +881,15 @@ function bookDayHTML(){
     '<div class="legend">'+
       '<span><i style="background:var(--surf);border:1px solid var(--line)"></i>가능</span>'+
       '<span><i style="background:var(--red)"></i>내 예약</span>'+
-      '<span><i style="background:#16293D;border:1px solid #20364E"></i>예약 완료</span>'+
-      '<span><i style="background:#2B2518;border:1px solid #8A7442"></i>레슨</span>'+
-      '<span><i style="border:1px dashed #3A5570"></i>사용 불가</span>'+
+      '<span><i style="background:#2B2518;border:1px solid #8A7442"></i>'+(admin?'레슨':'내 레슨')+'</span>'+
+      '<span><i style="background:#0D1826;border:1px solid #1A2A3C"></i>'+(admin?'예약 완료':'사용 불가')+'</span>'+
+      (admin ? '<span><i style="border:1px dashed #3A5570"></i>닫은 시간</span>' : '')+
     '</div>'+
     '<div class="grid">'+cells.join('')+'</div>'+
 
     (admin
       ? '<div class="sub muted" style="margin-top:12px">빈 칸을 누르면 내 연습·레슨·회원 예약·차단을 고를 수 있어요.</div>'
-      : '<div class="sub muted" style="margin-top:12px">이미 예약된 시간은 누가 썼는지 보이지 않습니다.</div>');
+      : '<div class="sub muted" style="margin-top:12px">회색 칸은 이미 찬 시간이에요. 누가 썼는지는 서로 보이지 않습니다.</div>');
 }
 
 /* ===================== 내 정보 ===================== */
@@ -1084,15 +1105,12 @@ function confirmBook(hour){
 
 /** 회원이 쓸 수 없는 칸을 눌렀을 때의 안내 */
 function whyBlocked(w){
-  if(w==='block')
-    info({ title:'사용할 수 없는 시간이에요',
-           body:'연습실 사정으로 닫아둔 시간입니다.<br>다른 시간을 선택해 주세요.' });
-  else if(w==='lesson')
-    info({ title:'레슨이 있는 시간이에요',
-           body:'이 시간에는 레슨이 진행됩니다.<br>다른 시간을 선택해 주세요.' });
+  if(w==='mylesson')
+    info({ title:'내 레슨 시간이에요',
+           body:'이 시간에는 레슨이 있습니다.<br>일정을 바꾸시려면 리듬 하우스에 문의해 주세요.' });
   else
-    info({ title:'이미 예약된 시간이에요',
-           body:'다른 분이 먼저 예약했습니다.<br>다른 시간을 선택해 주세요.' });
+    info({ title:'사용할 수 없는 시간이에요',
+           body:'이미 찬 시간입니다.<br>다른 시간을 선택해 주세요.' });
 }
 async function doBook(hour){
   const r = roomOf(selRoom);
