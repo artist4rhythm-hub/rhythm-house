@@ -195,6 +195,14 @@ textarea:focus{outline:none;border-color:var(--black-room)}
   line-height:1.6;cursor:pointer}
 .chk input{width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:var(--red)}
 
+.stepper{display:flex;align-items:center;gap:2px;background:var(--deep);
+  border:1px solid var(--line);border-radius:12px;padding:3px}
+.stepper button{width:40px;height:38px;border-radius:9px;font-size:18px;
+  color:var(--cream);background:var(--surf2)}
+.stepper button:active{background:var(--red)}
+.stepper b{font-family:var(--f-head);font-size:19px;min-width:46px;text-align:center;
+  font-weight:400}
+
 /* ---------- 안내 배너 ---------- */
 .notice{border-radius:13px;padding:14px 16px;background:#3A1A16;border:1px solid #6B2E26;
   color:#F2BDB3;font-size:13px;line-height:1.65;margin-top:13px}
@@ -375,8 +383,7 @@ const ROOMS = [
 const CANCEL_LIMIT_H = 3;   // 예약 시각 3시간 전까지만 취소·변경
 const CREDIT_DAYS    = 7;   // 연습권 유효기간
 const TIER_BASE      = 3;   // 기본 주 3시간
-const TIER_UP        = 5;   // 확장 주 5시간
-const CONFIRM_WEEKS  = 4;   // 주 5시간 4주 연속 → 기본 확정
+const WEEKLY_MAX     = 12;  // 관리자가 올릴 수 있는 주간 시간 상한
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 
@@ -445,6 +452,19 @@ function nameOf(b){
   if(b.memberId && ME && b.memberId === myMid()) return (ME.name || '나');
   const m = members.find(x=> (x.mid || x.key) === b.memberId);
   return (m && m.name) || b.memberName || '예약';
+}
+
+/**
+ * 이번 주기에 쓴 시간 — 따로 저장하지 않고 예약에서 센다.
+ * 지나간 예약만 세므로, 예약만 해두고 아직 오지 않은 시간은 들어가지 않는다.
+ */
+function usedInCycle(m, list){
+  if(!m) return 0;
+  const from = m.cycleStart || m.expiresAt || '';
+  const now = new Date();
+  return (list||[]).filter(b=>
+    b.kind === 'practice' && (!from || b.date >= from) && slotTime(b.date,b.hour) < now
+  ).length;
 }
 
 /** 유효기간이 지난 연습권은 0으로 본다 */
@@ -730,10 +750,7 @@ function renderHome(){
   const pct = total ? Math.round(c/total*100) : 0;
   const upcoming = myBookings.filter(b=> slotTime(b.date,b.hour) >= new Date());
 
-  let tierNote;
-  if((ME.baseHours||TIER_BASE) >= TIER_UP) tierNote = '기본 주 5시간 확정';
-  else if(total >= TIER_UP) tierNote = '주 5시간 확장 중 · '+(ME.fullStreak||0)+'/'+CONFIRM_WEEKS+'주';
-  else tierNote = '다 채우면 다음 주 5시간';
+  const used = usedInCycle(ME, myBookings);
 
   document.getElementById('pgHome').innerHTML =
     '<div class="h1">'+esc(ME.name||'회원')+'님,<br>오늘도 연습해볼까요?</div>'+
@@ -745,7 +762,8 @@ function renderHome(){
         '<div class="big">'+c+'</div><div class="muted" style="font-size:17px">시간</div>'+
         '<div class="spacer"></div><div class="sub">주 '+total+'시간 중</div></div>'+
       '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
-      '<div class="sub rose" style="margin-top:11px">'+esc(tierNote)+'</div>'+
+      '<div class="sub muted" style="margin-top:11px;font-size:12px">'+
+        '이번 주기 '+used+'시간 연습 · 꾸준히 채우면 주간 시간을 늘려 드려요</div>'+
     '</div>'+
 
     endingSoonNotice()+
@@ -1028,7 +1046,7 @@ function renderMe(){
     '<div class="card" style="margin-top:14px">'+
       kv('이름', ME.name||'—')+ kv('연락처', ME.phone||'—')+ kv('이메일', ME.email||'—')+
       kv('레슨', nextLessonText())+
-      kv('연습권', liveCredits(ME)+'시간 · 주 '+(ME.weeklyHours||TIER_BASE)+'시간')+
+      kv('연습권', liveCredits(ME)+'시간 남음 · 주 '+weeklyOf(ME)+'시간')+
       kv('유효기간', ME.expiresAt ? fmtDate(ME.expiresAt)+'까지' : '—', true)+
     '</div>'+
     '<div class="sec"><span>레슨 기록</span><span class="muted">'+myLessons.length+'회</span></div>'+
@@ -1145,17 +1163,24 @@ function stat(n,label,color){
 
 /* ===================== 관리자 · 회원 관리 ===================== */
 function renderMembers(){
-  const list = members.filter(m=>m.role!=='admin' || m.key===ME.key);
+  // 관리자는 항상 맨 위. 나중에 강사가 늘어나도 위에 모인다.
+  const list = members.slice().sort((a,b)=>{
+    const ra = a.role==='admin' ? 0 : 1, rb = b.role==='admin' ? 0 : 1;
+    if(ra !== rb) return ra - rb;
+    return (a.name||'').localeCompare(b.name||'','ko');
+  });
   document.getElementById('pgMembers').innerHTML =
     '<div class="row"><div class="h1" style="font-size:19px">회원 관리</div><div class="spacer"></div>'+
       '<button class="btn sm primary" data-act="addMember">＋ 회원 추가</button></div>'+
-    '<div class="sec"><span>전체 회원</span><span>'+list.length+'명</span></div>'+
+    '<div class="sec"><span>전체 회원</span><span>'+
+      list.filter(m=>m.role!=='admin').length+'명 · 관리자 '+
+      list.filter(m=>m.role==='admin').length+'명</span></div>'+
     (list.length ? list.map(memberCard).join('') : '<div class="empty">등록된 회원이 없어요</div>');
   bind('pgMembers');
 }
 function memberCard(m){
   const c = liveCredits(m);
-  const total = m.weeklyHours || TIER_BASE;
+  const weekly = weeklyOf(m);
   const quota = m.lessonQuota || LESSON_QUOTA;
   const done  = allLessons.filter(x=>x.memberId === (m.mid||m.key)).length;
   const names = ['일','월','화','수','목','금','토'];
@@ -1176,7 +1201,7 @@ function memberCard(m){
     '<div class="row" style="align-items:baseline;gap:7px;margin-top:11px">'+
       '<div class="sub">연습권</div>'+
       '<div class="num gold" style="font-size:18px">'+c+'시간</div>'+
-      '<div class="sub muted">'+(m.expiresAt? fmtDate(m.expiresAt)+' 소멸':'미지급')+'</div>'+
+      '<div class="sub muted">주 '+weekly+'시간</div>'+
       '<div class="spacer"></div>'+
       '<div class="sub">레슨 <b class="gold" style="font-weight:400">'+done+'</b> / '+quota+'회</div>'+
     '</div>'+
@@ -1207,12 +1232,8 @@ function renderMemberDetail(){
   const past     = mbBookings.filter(b=> slotTime(b.date,b.hour) <  now).reverse().slice(0,8);
 
   const c = liveCredits(m);
-  const total = m.weeklyHours || TIER_BASE;
-  const used  = m.usedThisCycle || 0;
-  const base  = m.baseHours || TIER_BASE;
-  const tier  = base>=TIER_UP ? '기본 주 5시간 확정'
-              : total>=TIER_UP ? '주 5시간 확장 중 · '+(m.fullStreak||0)+'/'+CONFIRM_WEEKS+'주'
-              : '주 3시간';
+  const weekly = weeklyOf(m);
+  const used = usedInCycle(m, mbBookings);
 
   document.getElementById('pgMember').innerHTML =
     '<div class="row">'+
@@ -1252,8 +1273,12 @@ function renderMemberDetail(){
       '<button class="cta" style="height:50px;margin-top:14px" data-act="lessonNew">'+
         '레슨 완료 처리</button>'+
       '<div class="sub muted" style="font-size:11px;margin-top:8px;line-height:1.6">'+
-        '날짜와 시각을 조정해서 기록할 수 있어요. 연습권은 지급 여부를 고를 수 있습니다.</div>'+
+        '지난 날짜도 넣을 수 있어요. 나중에 몰아서 입력해도 됩니다.</div>'+
     '</div>'+
+
+    /* ── 전체 레슨 기록 ── */
+    '<div class="sec"><span>전체 레슨 기록</span><span class="muted">'+mbLessons.length+'회</span></div>'+
+    (mbLessons.length ? lessonHistory() : '<div class="empty">아직 기록이 없어요</div>')+
 
     /* ── 레슨비 ── */
     '<div class="sec"><span>레슨비</span><span class="muted">'+
@@ -1272,17 +1297,37 @@ function renderMemberDetail(){
       '</div></div>'+
 
     /* ── 연습권 ── */
-    '<div class="sec"><span>연습권</span><span class="muted">'+esc(tier)+'</span></div>'+
+    '<div class="sec"><span>연습권</span><span class="muted">이번 주기 '+used+'시간 연습</span></div>'+
     '<div class="card">'+
       '<div class="row" style="align-items:baseline;gap:6px">'+
-        '<div class="big">'+c+'</div><div class="muted" style="font-size:17px">시간</div>'+
+        '<div class="big">'+c+'</div><div class="muted" style="font-size:17px">시간 남음</div>'+
         '<div class="spacer"></div>'+
         '<div class="sub">'+(m.expiresAt? fmtDate(m.expiresAt)+' 소멸':'미지급')+'</div>'+
       '</div>'+
       '<div class="bar" style="margin-top:9px"><i style="width:'+
-        (total?Math.round(used/total*100):0)+'%"></i></div>'+
+        (weekly?Math.min(100,Math.round(used/weekly*100)):0)+'%"></i></div>'+
       '<div class="sub muted" style="margin-top:8px;font-size:11px">'+
-        '이번 주기 '+used+' / '+total+'시간 사용</div>'+
+        '이번 주기 '+used+' / '+weekly+'시간 사용'+
+        (m.cycleStart ? ' · '+fmtDate(m.cycleStart)+' 지급' : '')+'</div>'+
+
+      '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft)">'+
+        '<div class="row">'+
+          '<div>'+
+            '<div class="sub gold">주간 연습 시간</div>'+
+            '<div class="sub muted" style="font-size:11px;margin-top:3px">'+
+              '다음 레슨 때 지급할 양이에요</div>'+
+          '</div>'+
+          '<div class="spacer"></div>'+
+          '<div class="stepper">'+
+            '<button data-act="weekly" data-key="'+m.key+'" data-n="-1">－</button>'+
+            '<b>'+weekly+'</b>'+
+            '<button data-act="weekly" data-key="'+m.key+'" data-n="1">＋</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="sub muted" style="font-size:11px;margin-top:10px;line-height:1.6">'+
+          '기본은 주 '+TIER_BASE+'시간입니다. 꾸준히 채우고 연습이 잘 되고 있다면 '+
+          '올려 주세요. 바꾼 값은 <b>다음 레슨 때 지급할 때부터</b> 적용됩니다.</div>'+
+      '</div>'+
     '</div>'+
 
     /* ── 예약 ── */
@@ -1297,6 +1342,26 @@ function renderMemberDetail(){
     '<div style="height:18px"></div>';
 
   bind('pgMember');
+}
+
+/** 전체 레슨 기록을 달별로 묶어 최신순으로 */
+function lessonHistory(){
+  const byMonth = {};
+  mbLessons.forEach(x=>{
+    const m = x.month || (x.date||'').slice(0,7) || '날짜 없음';
+    (byMonth[m] = byMonth[m] || []).push(x);
+  });
+  return Object.keys(byMonth).sort().reverse().map(m=>{
+    const rows = byMonth[m].slice().reverse();
+    const label = /^\d{4}-\d{2}$/.test(m)
+      ? Number(m.slice(0,4))+'년 '+Number(m.slice(5,7))+'월' : m;
+    return '<div class="card flat" style="margin-bottom:10px">'+
+      '<div class="row" style="margin-bottom:9px">'+
+        '<div class="sub gold">'+esc(label)+'</div><div class="spacer"></div>'+
+        '<div class="sub muted">'+rows.length+'회</div></div>'+
+      rows.map(x=>lessonRow(x)).join('')+
+    '</div>';
+  }).join('');
 }
 
 function kakaoLink(v){
@@ -1365,6 +1430,7 @@ async function handle(d){
     case 'lessonNew':  lessonForm(null); break;
     case 'lessonEdit': lessonForm(mbLessons.find(x=>x.id===d.id)); break;
     case 'togglePay':  togglePay(d.key); break;
+    case 'weekly':     setWeekly(d.key, Number(d.n)); break;
     case 'admCancelAny': admCancelAny(d.id); break;
   }
 }
@@ -1425,10 +1491,7 @@ async function doBook(hour){
         addedByAdmin: admin, createdAt: serverTimestamp()
       });
       if(!admin){
-        tx.update(mRef, {
-          credits: (m.credits||0) - 1,
-          usedThisCycle: (m.usedThisCycle||0) + 1
-        });
+        tx.update(mRef, { credits: (m.credits||0) - 1 });
       }
     });
     toast('예약되었어요');
@@ -1473,10 +1536,7 @@ async function doCancel(b){
       }
       tx.delete(bRef);
       if(refund){
-        tx.update(mRef, {
-          credits: (m.credits||0) + 1,
-          usedThisCycle: Math.max(0, (m.usedThisCycle||0) - 1)
-        });
+        tx.update(mRef, { credits: (m.credits||0) + 1 });
       }
     });
     toast('예약이 취소되었어요');
@@ -1574,10 +1634,7 @@ function admCancel(id){
             tx.delete(doc(db,'bookings',b.id));
             if(mSnap.exists()){
               const m = mSnap.data();
-              tx.update(mRef, {
-                credits:(m.credits||0)+1,
-                usedThisCycle: Math.max(0,(m.usedThisCycle||0)-1)
-              });
+              tx.update(mRef, { credits:(m.credits||0)+1 });
             }
           });
         } else {
@@ -1596,6 +1653,22 @@ function openMember(key){
   selMember = key;
   subscribeMember(m.mid || m.key);
   go('member');
+}
+
+/**
+ * 주간 연습 시간을 올리고 내린다.
+ * 자동 승급을 두지 않는 이유 — 연습이 잘 되고 있는지는
+ * 가르치는 사람이 보는 게 어떤 계산보다 정확하기 때문이다.
+ */
+async function setWeekly(key, delta){
+  const m = members.find(x=>x.key===key);
+  if(!m) return;
+  const next = Math.max(1, Math.min(WEEKLY_MAX, weeklyOf(m) + delta));
+  if(next === weeklyOf(m)) return;
+  try{
+    await updateDoc(doc(db,'members',key), { weeklyHours: next });
+    toast('주 '+next+'시간으로 바꿨어요 · 다음 지급부터 적용');
+  }catch(e){ console.error(e); toast('저장에 실패했어요'); }
 }
 
 /** 레슨비 입금 확인 달을 켜고 끈다 */
@@ -1636,7 +1709,7 @@ function lessonForm(x){
   if(!m) return;
   const isNew = !x;
   const now = new Date();
-  const t = nextTier(m);
+  const give = weeklyOf(m);
 
   // 새로 남길 때는 가장 가까운 예정 레슨을 기본값으로 끌어온다
   let defDate = ymd(now), defTime = m.lessonTime || pad(now.getHours())+':00';
@@ -1662,9 +1735,13 @@ function lessonForm(x){
         '<div><label for="lsNote">메모 (선택)</label>'+
           '<input id="lsNote" value="'+esc(isNew?'':(x.memo||''))+'" placeholder="진도·특이사항"></div>'+
         (isNew
-          ? '<label class="chk"><input type="checkbox" id="lsGrant" checked>'+
-            '<span>연습권 '+t.next+'시간도 함께 지급 ('+CREDIT_DAYS+'일 뒤 소멸)</span></label>'+
-            '<div class="sub muted" style="font-size:11px;line-height:1.6">'+esc(t.note)+'</div>'
+          ? '<label class="chk"><input type="checkbox" id="lsGrant"'+
+            (defDate===ymd(now)?' checked':'')+'>'+
+            '<span>연습권 '+give+'시간도 함께 지급 ('+CREDIT_DAYS+'일 뒤 소멸)</span></label>'+
+            '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
+            '지금 정해둔 주간 시간은 '+give+'시간입니다. 바꾸려면 아래 연습권 칸에서 조정하세요.'+
+            (defDate===ymd(now) ? ''
+              : '<br>지난 날짜라 지급은 꺼 두었어요. 필요하면 켜세요.')+'</div>'
           : '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
             (x.grantedHours ? '이 기록으로 연습권 '+x.grantedHours+'시간을 지급했습니다.<br>'+
               '기록을 고쳐도 이미 지급한 연습권은 그대로입니다.' : '연습권 지급 없이 기록만 남긴 건입니다.')+
@@ -1703,11 +1780,11 @@ function lessonForm(x){
         await addDoc(collection(db,'lessons'), {
           memberId: (m.mid||m.key), memberName: m.name||'',
           date, time: time||'', month: date.slice(0,7), memo,
-          grantedHours: grant ? t.next : 0,
-          usedBefore: t.used, note: grant ? t.note : '기록만',
+          grantedHours: grant ? give : 0,
+          note: grant ? '주 '+give+'시간 지급' : '기록만',
           createdAt: serverTimestamp()
         });
-        if(grant) await grantCredits(m, t);
+        if(grant) await grantCredits(m);
         toast(grant ? '레슨 완료 · 연습권을 지급했어요' : '레슨 기록을 남겼어요');
       } else {
         await updateDoc(doc(db,'lessons',x.id), { date, time: time||'', month: date.slice(0,7), memo });
@@ -1717,63 +1794,20 @@ function lessonForm(x){
   };
 }
 
-/* ===================== 연습권 티어 계산 ===================== */
 /**
- * 주 3시간으로 시작 → 다 채우면 다음 주 5시간
- * 주 5시간을 4주 연속 다 채우면 기본 주 5시간 확정
- * 주 3시간 미만으로 쓰면 다시 주 3시간
+ * 연습권을 지급한다. 지급량은 관리자가 정해둔 주간 시간 그대로다.
+ * 자동으로 올리거나 내리지 않는다 — 늘릴지 말지는 관리자가 보고 판단한다.
  */
-function nextTier(m){
-  const granted = m.weeklyHours || TIER_BASE;
-  const used    = m.usedThisCycle || 0;
-  let base   = m.baseHours  || TIER_BASE;
-  let streak = m.fullStreak || 0;
-  let next, note;
-
-  if(!m.cycles){
-    next = TIER_BASE; base = TIER_BASE; streak = 0;
-    note = '첫 지급 · 주 '+TIER_BASE+'시간';
-  }
-  else if(used < TIER_BASE){
-    next = TIER_BASE; base = TIER_BASE; streak = 0;
-    note = '지난 주기 '+used+'시간 사용 · 주 '+TIER_BASE+'시간으로 조정';
-  }
-  else if(used >= granted){
-    if(granted >= TIER_UP){
-      streak += 1; next = TIER_UP;
-      if(streak >= CONFIRM_WEEKS){
-        base = TIER_UP;
-        note = '주 '+TIER_UP+'시간 '+CONFIRM_WEEKS+'주 연속 달성 · 기본 주 '+TIER_UP+'시간 확정';
-      } else {
-        note = '주 '+TIER_UP+'시간 다 채움 ('+streak+'/'+CONFIRM_WEEKS+'주)';
-      }
-    } else {
-      next = TIER_UP; streak = 0;
-      note = '주 '+TIER_BASE+'시간 다 채움 · 주 '+TIER_UP+'시간으로 확장';
-    }
-  }
-  else {
-    next = granted; streak = 0;
-    note = '지난 주기 '+used+'시간 사용 · 주 '+next+'시간 유지';
-  }
-  if(base >= TIER_UP) next = TIER_UP;
-  return { next, base, streak, note, used };
-}
-
-/** 연습권만 지급한다. 레슨 기록은 lessonForm 쪽에서 남긴다. */
-async function grantCredits(m, t){
-  const expires = ymd(addDays(new Date(), CREDIT_DAYS));
+async function grantCredits(m){
+  const now = new Date();
   await updateDoc(doc(db,'members',m.key), {
-    credits: t.next,
-    weeklyHours: t.next,
-    usedThisCycle: 0,
-    baseHours: t.base,
-    fullStreak: t.streak,
-    cycles: (m.cycles||0) + 1,
-    expiresAt: expires,
+    credits: weeklyOf(m),
+    cycleStart: ymd(now),
+    expiresAt: ymd(addDays(now, CREDIT_DAYS)),
     lastLessonAt: serverTimestamp()
   });
 }
+function weeklyOf(m){ return (m && m.weeklyHours) || TIER_BASE; }
 
 /* ===================== 관리자 · 회원 추가/설정 ===================== */
 function formMember(m){
@@ -1888,9 +1922,8 @@ async function createMember(p){
       kakao: p.kakao||'', guardianName: p.guardianName||'',
       guardianPhone: p.guardianPhone||'', memo: p.memo||'',
       paidMonths: [],
-      credits:0, weeklyHours:TIER_BASE, usedThisCycle:0,
-      baseHours:TIER_BASE, fullStreak:0, cycles:0,
-      expiresAt:null, createdAt: serverTimestamp()
+      credits:0, weeklyHours:TIER_BASE,
+      cycleStart:null, expiresAt:null, createdAt: serverTimestamp()
     });
     info({ title:'회원을 등록했어요',
       body: esc(name)+'님<br><br>'+
