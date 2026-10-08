@@ -215,7 +215,7 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
   <div class="ft">
     <div class="slogan">드러머는 연습으로 만들어집니다</div>
     <div class="sp"></div>
-    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v14</span></div>
+    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v15</span></div>
   </div>
 </div>
 
@@ -258,6 +258,12 @@ function parseYmd(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,
 function pad(n){ return String(n).padStart(2,'0'); }
 function dow(d){ return ['일','월','화','수','목','금','토'][d.getDay()]; }
 function slotTime(s,h){ const d=parseYmd(s); d.setHours(h,0,0,0); return d; }
+/** '22:30' + 30분 → '23:00' */
+function hmPlus(t, add){
+  const [h,m] = String(t||'0:0').split(':').map(Number);
+  const x = ((h*60+m+(add||0)) % 1440 + 1440) % 1440;
+  return pad(Math.floor(x/60))+':'+pad(x%60);
+}
 /** 그 날짜가 속한 주의 월요일 */
 function startOfWeek(s){
   const d = parseYmd(s), w = d.getDay();
@@ -332,7 +338,9 @@ function paint(){
           '<div class="badge '+(blocked?'idle':'live')+'">'+
             (blocked?'':'<span class="dot"></span>')+badge+'</div></div>'+
         '<div class="mid"><div class="who">'+big+'</div>'+
-          '<div class="when">'+pad(cur.hour)+':00 – '+pad(cur.hour+1)+':00</div>'+
+          '<div class="when">'+(cur.kind==='lesson' && cur.lessonAt
+              ? cur.lessonAt+' ~ '+hmPlus(cur.lessonAt, cur.durMin||30)
+              : pad(cur.hour)+':00 – '+pad((cur.hour+1)%24)+':00')+'</div>'+
           (soon ? '<div class="soon">'+left+'분 뒤 다음 차례 · 정리하고 나와 주세요</div>' : '')+
         '</div>'+
         '<div><div class="foot"><span class="l">남은 시간</span>'+
