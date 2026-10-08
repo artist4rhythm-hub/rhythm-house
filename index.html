@@ -151,6 +151,8 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .wkhead .cell{flex:1;min-width:0;text-align:center;padding:7px 0;font-size:10px;color:var(--dim)}
 .wkhead .cell b{display:block;font-family:var(--f-head);font-size:15px;color:var(--cream);margin-top:1px}
 .wkhead .cell.on{background:var(--surf2)}
+.wkhead .cell .rooms{display:flex;gap:2px;margin-top:5px;padding:0 3px}
+.wkhead .cell .rooms i{flex:1;height:4px;border-radius:2px;display:block}
 .wkhead .cell.on b{color:var(--red-l)}
 .wkbody{display:flex;max-height:min(56vh,520px);overflow-y:auto;scrollbar-width:thin}
 .wkhours{width:36px;flex:none;border-right:1px solid var(--line)}
@@ -161,6 +163,9 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .wkcol.today{background:rgba(200,70,58,.05)}
 .wkrow{height:22px;display:flex;gap:2px;padding:2px 3px;border-bottom:1px solid #16263A;width:100%}
 .wc{flex:1;min-width:0;display:block;border-radius:3px;background:#17293C}
+/* 칸마다 왼쪽 모서리에 연습실 색을 남겨 어느 칸이 어느 방인지 늘 보이게 한다 */
+.wc.rb{box-shadow:inset 2px 0 0 rgba(92,130,173,.85)}
+.wc.rw{box-shadow:inset 2px 0 0 rgba(227,207,166,.75)}
 .wc.past{background:#101B27}
 .wc.taken{background:#3A5A80}
 .wc.mine{background:var(--red)}
@@ -169,6 +174,26 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .wklegend{display:flex;gap:11px;flex-wrap:wrap;margin-top:11px}
 .wklegend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)}
 .wklegend i{width:11px;height:11px;border-radius:3px;display:block}
+
+/* ---------- 회원 카드 · 레슨 기록 ---------- */
+.memcard{display:block;width:100%;text-align:left;margin-bottom:11px;cursor:pointer}
+.memcard:active{background:var(--surf2)}
+.chip.paid{background:#1C3326;border-color:#2F5A3E;color:#9FD2A8}
+.chip.unpaid{border-color:#5A2A26;color:var(--red-l)}
+.lrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:11px 12px;border-radius:11px;background:var(--deep);border:1px solid var(--line-soft);
+  margin-bottom:7px;color:var(--cream)}
+.lrow .d{flex:1;font-size:14px}
+.lrow .n{font-size:11px;color:var(--mute)}
+.lrow .go{font-size:11px;color:var(--dim);border:1px solid var(--line);
+  border-radius:8px;padding:3px 8px}
+textarea{background:var(--surf);border:1px solid var(--line);border-radius:12px;
+  padding:11px 14px;color:var(--cream);width:100%;font-family:inherit;font-size:15px;
+  line-height:1.6;resize:vertical}
+textarea:focus{outline:none;border-color:var(--black-room)}
+.chk{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--dim);
+  line-height:1.6;cursor:pointer}
+.chk input{width:18px;height:18px;flex-shrink:0;margin-top:1px;accent-color:var(--red)}
 
 /* ---------- 안내 배너 ---------- */
 .notice{border-radius:13px;padding:14px 16px;background:#3A1A16;border:1px solid #6B2E26;
@@ -310,6 +335,7 @@ a{color:var(--red-l)}
     <section id="pgMe" class="hide"></section>
     <section id="pgToday" class="hide"></section>
     <section id="pgMembers" class="hide"></section>
+    <section id="pgMember" class="hide"></section>
   </div>
 
   <nav class="nav" id="nav"></nav>
@@ -352,6 +378,7 @@ const TIER_BASE      = 3;   // 기본 주 3시간
 const TIER_UP        = 5;   // 확장 주 5시간
 const CONFIRM_WEEKS  = 4;   // 주 5시간 4주 연속 → 기본 확정
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
+const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -367,6 +394,12 @@ let scrolledFor = null;     // 현황 타임라인 자동 스크롤을 한 날�
 let bookMode  = 'day';      // 예약 화면: day | week
 let adminMode = 'day';      // 현황 화면: day | week
 let weekStart = '';         // 주간 보기의 월요일
+let myLessons = [];         // 내 레슨 완료 기록
+let allLessons = [];        // (관리자) 이번 달 전체 레슨 기록 — 목록에 회차를 띄우려고
+let selMember = '';         // (관리자) 지금 들여다보는 회원의 key
+let mbLessons  = [];        // (관리자) 그 회원의 레슨 기록
+let mbBookings = [];        // (관리자) 그 회원의 예약 전체
+let unsubMyLessons = null, unsubMbLessons = null, unsubMbBookings = null, unsubAllLessons = null;
 
 /* ===================== 유틸 ===================== */
 function ymd(d){
@@ -512,8 +545,10 @@ function show(which){
 }
 
 onAuthStateChanged(auth, async (user)=>{
-  [unsubDay, unsubWeek, unsubMine, unsubMe, unsubMembers].forEach(u=>{ if(u) u(); });
+  [unsubDay, unsubWeek, unsubMine, unsubMe, unsubMembers,
+   unsubMyLessons, unsubMbLessons, unsubMbBookings, unsubAllLessons].forEach(u=>{ if(u) u(); });
   unsubDay = unsubWeek = unsubMine = unsubMe = unsubMembers = null;
+  unsubMyLessons = unsubMbLessons = unsubMbBookings = unsubAllLessons = null;
 
   if(!user){ ME=null; show('scLogin'); return; }
 
@@ -552,6 +587,12 @@ onAuthStateChanged(auth, async (user)=>{
     ME = { key, uid:user.uid, ...s.data() };
     render();
   });
+  // 내 레슨 완료 기록 (이번 달 몇 회 했는지 보여주려고)
+  unsubMyLessons = onSnapshot(
+    query(collection(db,'lessons'), where('memberId','==', ME.mid || key)),
+    s=>{ myLessons = s.docs.map(d=>({ id:d.id, ...d.data() })).sort(byLessonDate); render(); },
+    ()=>{}
+  );
   // 내 예약 실시간 구독 — 예약에는 이메일이 아니라 내부 식별자(mid)만 쓴다
   unsubMine = onSnapshot(
     query(collection(db,'bookings'), where('memberId','==', ME.mid || key)),
@@ -586,11 +627,13 @@ function buildNav(){
 }
 function go(p){
   page = p;
-  const map = { home:'pgHome', book:'pgBook', me:'pgMe', today:'pgToday', members:'pgMembers' };
+  const map = { home:'pgHome', book:'pgBook', me:'pgMe',
+                today:'pgToday', members:'pgMembers', member:'pgMember' };
   Object.entries(map).forEach(([k,id])=>
     document.getElementById(id).classList.toggle('hide', k!==p));
+  const navKey = (p==='member') ? 'members' : p;   // 상세 화면에서도 '회원' 탭이 켜져 있다
   document.querySelectorAll('#nav [data-go]').forEach(b=>
-    b.classList.toggle('on', b.dataset.go===p));
+    b.classList.toggle('on', b.dataset.go===navKey));
   window.scrollTo(0,0);
 
   if(p==='book' || p==='today') subscribeDay();
@@ -604,6 +647,7 @@ function render(){
   if(page==='me')      renderMe();
   if(page==='today')   renderToday();
   if(page==='members') renderMembers();
+  if(page==='member')  renderMemberDetail();
 }
 
 /* ===================== 실시간 구독 ===================== */
@@ -632,8 +676,46 @@ function subscribeWeek(){
     ()=> toast('주간 현황을 불러오지 못했어요')
   );
 }
+/** 레슨 기록을 날짜·시각 순으로 */
+function byLessonDate(a,b){
+  return ((a.date||'')+(a.time||'')).localeCompare((b.date||'')+(b.time||''));
+}
+/** 이번 달 레슨 기록만 */
+function thisMonthLessons(list){
+  const m = monthKey(new Date());
+  return (list||[]).filter(x=> (x.month || (x.date||'').slice(0,7)) === m);
+}
+function monthKey(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1); }
+
+/** (관리자) 한 회원의 레슨 기록과 예약을 통째로 구독한다 */
+function subscribeMember(mid){
+  if(unsubMbLessons)  unsubMbLessons();
+  if(unsubMbBookings) unsubMbBookings();
+  mbLessons = []; mbBookings = [];
+  unsubMbLessons = onSnapshot(
+    query(collection(db,'lessons'), where('memberId','==',mid)),
+    s=>{ mbLessons = s.docs.map(d=>({ id:d.id, ...d.data() })).sort(byLessonDate);
+         if(page==='member') renderMemberDetail(); },
+    ()=> toast('레슨 기록을 불러오지 못했어요')
+  );
+  unsubMbBookings = onSnapshot(
+    query(collection(db,'bookings'), where('memberId','==',mid)),
+    s=>{ mbBookings = s.docs.map(d=>({ id:d.id, ...d.data() }))
+           .sort((a,b)=> (a.date+pad(a.hour)).localeCompare(b.date+pad(b.hour)));
+         if(page==='member') renderMemberDetail(); },
+    ()=> toast('예약을 불러오지 못했어요')
+  );
+}
+
 function subscribeMembers(){
   if(!isAdmin() || unsubMembers) return;
+  // 이번 달 레슨 기록 전체 — 회원 목록에 'n / 4회'를 띄우는 데 쓴다
+  unsubAllLessons = onSnapshot(
+    query(collection(db,'lessons'), where('month','==', monthKey(new Date()))),
+    s=>{ allLessons = s.docs.map(d=>d.data());
+         if(page==='members') renderMembers(); },
+    ()=>{}
+  );
   unsubMembers = onSnapshot(collection(db,'members'), s=>{
     members = s.docs.map(d=>({ key:d.id, ...d.data() }))
       .sort((a,b)=> (a.name||'').localeCompare(b.name||'','ko'));
@@ -673,13 +755,7 @@ function renderHome(){
           '<div class="sub rose">연습권 유효기간이 지났어요. 다음 레슨 때 새로 지급됩니다.</div></div>'
       : '')+
 
-    '<div class="card flat" style="margin-top:12px">'+
-      '<div class="row">'+
-        '<div><div class="sub gold">다음 레슨</div>'+
-          '<div style="margin-top:4px">'+esc(nextLessonText())+'</div></div>'+
-        '<div class="spacer"></div>'+
-        '<div class="sub" style="text-align:right">이번 달<br>'+(ME.lessonsThisMonth||0)+' / 4회</div>'+
-      '</div></div>'+
+    lessonCard()+
 
     '<div class="sec"><span>예약한 연습</span><span>'+upcoming.length+'건</span></div>'+
     (upcoming.length ? upcoming.map(bookingCard).join('')
@@ -713,6 +789,55 @@ function nextLessonText(){
   if(ME.lessonDay==null || !ME.lessonTime) return '일정 미등록';
   const names=['일','월','화','수','목','금','토'];
   return names[ME.lessonDay]+'요일 '+ME.lessonTime+' · 30분';
+}
+/** 관리자가 잡아둔 다음 레슨 (연습실 예약으로 들어온다) */
+function nextLessonBooking(){
+  const now = new Date();
+  return myBookings.find(b=> b.kind==='lesson' && slotTime(b.date,b.hour) >= now);
+}
+/** 회원 홈의 레슨 카드 — 다음 일정, 이번 달 진행, 레슨비 */
+function lessonCard(){
+  const quota = ME.lessonQuota || LESSON_QUOTA;
+  const done  = thisMonthLessons(myLessons);
+  const nb    = nextLessonBooking();
+  const month = monthKey(new Date());
+  const paid  = (ME.paidMonths||[]).includes(month);
+
+  const dots = [];
+  for(let i=0;i<quota;i++)
+    dots.push('<i style="flex:1;height:6px;border-radius:3px;display:block;background:'+
+      (i<done.length?'#C9A961':'var(--surf2)')+'"></i>');
+
+  const nextTxt = nb
+    ? fmtDate(nb.date)+' '+pad(nb.hour)+':00 · '+roomOf(nb.roomId).name
+    : nextLessonText();
+  const nextSub = nb ? '잡혀 있는 일정' : '기본 일정 · 확정되면 여기에 표시돼요';
+
+  return '<div class="card" style="margin-top:12px">'+
+    '<div class="row">'+
+      '<div style="min-width:0">'+
+        '<div class="sub gold">다음 레슨</div>'+
+        '<div style="margin-top:5px;font-size:15px">'+esc(nextTxt)+'</div>'+
+        '<div class="sub muted" style="margin-top:3px;font-size:11px">'+nextSub+'</div>'+
+      '</div>'+
+      '<div class="spacer"></div>'+
+      '<div style="text-align:right;flex-shrink:0">'+
+        '<div class="num gold" style="font-size:19px">'+done.length+' / '+quota+'</div>'+
+        '<div class="sub muted" style="font-size:11px">이번 달 레슨</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="row" style="gap:5px;margin-top:12px">'+dots.join('')+'</div>'+
+    (done.length
+      ? '<div class="sub muted" style="margin-top:9px;font-size:11px">'+
+          '최근 '+esc(fmtDate(done[done.length-1].date))+
+          (done[done.length-1].time ? ' '+esc(done[done.length-1].time) : '')+' 완료</div>'
+      : '')+
+    '<div class="row" style="margin-top:12px;padding-top:11px;border-top:1px solid var(--line-soft)">'+
+      '<div class="sub">이번 달 레슨비</div><div class="spacer"></div>'+
+      '<div class="sub" style="color:'+(paid?'#9FD2A8':'var(--mute)')+'">'+
+        (paid?'입금 확인됨':'확인 전')+'</div>'+
+    '</div>'+
+  '</div>';
 }
 function bookingCard(b){
   const r = roomOf(b.roomId);
@@ -753,7 +878,9 @@ function weekGrid(){
 
   const head = '<div class="wkhead"><div class="corner"></div>'+
     days.map(x=>'<button class="cell'+(x.s===todayS?' on':'')+'" data-act="wkDay" data-d="'+x.s+'">'+
-      x.w+'<b>'+x.d+'</b></button>').join('')+'</div>';
+      x.w+'<b>'+x.d+'</b>'+
+      '<span class="rooms">'+ROOMS.map(r=>'<i style="background:'+r.color+'"></i>').join('')+'</span>'+
+    '</button>').join('')+'</div>';
 
   const hours = [];
   for(let h=0; h<24; h++) hours.push('<div>'+(h%2===0?pad(h):'')+'</div>');
@@ -761,9 +888,9 @@ function weekGrid(){
   const cols = days.map(x=>{
     const rows = [];
     for(let h=0; h<24; h++){
-      const segs = ROOMS.map(r=>{
+      const segs = ROOMS.map((r,ri)=>{
         const b = weekBookings.find(y=>y.roomId===r.id && y.date===x.s && y.hour===h);
-        let cls = 'wc';
+        let cls = 'wc ' + (ri===0 ? 'rb' : 'rw');
         if(b){
           const isMine = b.memberId === myMid();
           if(admin){
@@ -804,7 +931,8 @@ function weekNav(){
       '<button class="btn sm" data-act="wkShift" data-n="1">›</button>'+
       '<button class="btn sm" data-act="wkNow">이번 주</button>'+
     '</div>'+
-    '<div class="sec"><span>칸마다 왼쪽 블랙룸 · 오른쪽 화이트룸</span>'+
+    '<div class="sec"><span>'+ROOMS.map(r=>
+        '<b style="color:'+r.color+';font-weight:400">'+r.name+'</b>').join(' · ')+'</span>'+
       '<span class="muted">날짜를 누르면 그날로</span></div>';
 }
 
@@ -903,6 +1031,16 @@ function renderMe(){
       kv('연습권', liveCredits(ME)+'시간 · 주 '+(ME.weeklyHours||TIER_BASE)+'시간')+
       kv('유효기간', ME.expiresAt ? fmtDate(ME.expiresAt)+'까지' : '—', true)+
     '</div>'+
+    '<div class="sec"><span>레슨 기록</span><span class="muted">'+myLessons.length+'회</span></div>'+
+    (myLessons.length
+      ? myLessons.slice().reverse().slice(0,8).map(x=>
+          '<div class="card flat" style="padding:12px 14px;margin-bottom:8px">'+
+            '<div class="row">'+
+              '<div style="width:4px;height:28px;border-radius:2px;background:#C9A961"></div>'+
+              '<div style="flex:1;font-size:14px">'+fmtDate(x.date)+(x.time?' '+esc(x.time):'')+'</div>'+
+              '<div class="sub muted">'+(x.grantedHours?'연습권 '+x.grantedHours+'시간':'')+'</div>'+
+            '</div></div>').join('')
+      : '<div class="empty">아직 레슨 기록이 없어요</div>')+
     '<div class="sec">지난 연습</div>'+
     (past.length ? past.map(b=>{
       const r=roomOf(b.roomId);
@@ -1018,35 +1156,178 @@ function renderMembers(){
 function memberCard(m){
   const c = liveCredits(m);
   const total = m.weeklyHours || TIER_BASE;
-  const used = m.usedThisCycle || 0;
-  const base = m.baseHours || TIER_BASE;
-  const dots = [];
-  for(let i=0;i<total;i++)
-    dots.push('<i style="flex:1;height:5px;border-radius:3px;background:'+
-      (i<used?'var(--red)':'var(--surf2)')+';display:block"></i>');
-  const names=['일','월','화','수','목','금','토'];
-  const lesson = (m.lessonDay!=null && m.lessonTime) ? names[m.lessonDay]+' '+m.lessonTime : '미등록';
-  const tier = base>=TIER_UP ? '주 5시간 확정'
-             : total>=TIER_UP ? '확장 중 '+(m.fullStreak||0)+'/'+CONFIRM_WEEKS+'주'
-             : '주 3시간';
-  return '<div class="card" style="margin-bottom:11px">'+
+  const quota = m.lessonQuota || LESSON_QUOTA;
+  const done  = allLessons.filter(x=>x.memberId === (m.mid||m.key)).length;
+  const names = ['일','월','화','수','목','금','토'];
+  const lesson = (m.lessonDay!=null && m.lessonTime) ? names[m.lessonDay]+' '+m.lessonTime : '일정 미등록';
+  const paid = (m.paidMonths||[]).includes(monthKey(new Date()));
+
+  return '<button class="card memcard" data-act="openMember" data-key="'+m.key+'">'+
     '<div class="row">'+
       '<div class="num" style="font-size:17px">'+esc(m.name||'이름 없음')+'</div>'+
-      '<span class="chip" style="height:22px;font-size:11px">'+esc(lesson)+'</span>'+
+      (m.role==='admin' ? '<span class="chip on" style="height:21px;font-size:10px">관리자</span>' : '')+
       '<div class="spacer"></div>'+
-      '<div class="sub muted" style="font-size:11px">'+esc(m.phone||'')+'</div>'+
+      '<span class="chip '+(paid?'paid':'unpaid')+'" style="height:22px;font-size:11px">'+
+        (paid?'레슨비 확인':'레슨비 미확인')+'</span>'+
+    '</div>'+
+    '<div class="row sub muted" style="margin-top:7px;font-size:11px;gap:8px">'+
+      '<span>'+esc(m.phone||'연락처 없음')+'</span><span>·</span><span>'+esc(lesson)+'</span>'+
     '</div>'+
     '<div class="row" style="align-items:baseline;gap:7px;margin-top:11px">'+
       '<div class="sub">연습권</div>'+
       '<div class="num gold" style="font-size:18px">'+c+'시간</div>'+
       '<div class="sub muted">'+(m.expiresAt? fmtDate(m.expiresAt)+' 소멸':'미지급')+'</div>'+
-      '<div class="spacer"></div><div class="sub">'+tier+'</div>'+
+      '<div class="spacer"></div>'+
+      '<div class="sub">레슨 <b class="gold" style="font-weight:400">'+done+'</b> / '+quota+'회</div>'+
     '</div>'+
-    '<div class="row" style="gap:5px;margin-top:9px">'+dots.join('')+'</div>'+
-    '<div class="sub muted" style="margin-top:7px;font-size:11px">이번 주기 '+used+' / '+total+'시간 사용</div>'+
-    '<div class="row" style="gap:8px;margin-top:13px">'+
-      '<button class="btn primary" style="flex:1;height:42px" data-act="lesson" data-key="'+m.key+'">레슨 완료 · 연습권 지급</button>'+
-      '<button class="btn" style="height:42px" data-act="editMember" data-key="'+m.key+'">설정</button>'+
+  '</button>';
+}
+
+/* ===================== 관리자 · 회원 상세 ===================== */
+function renderMemberDetail(){
+  const m = members.find(x=>x.key===selMember);
+  if(!m){ go('members'); return; }
+
+  const quota = m.lessonQuota || LESSON_QUOTA;
+  const month = monthKey(new Date());
+  const done  = thisMonthLessons(mbLessons);
+  const paid  = (m.paidMonths||[]).includes(month);
+  const names = ['일','월','화','수','목','금','토'];
+  const basis = (m.lessonDay!=null && m.lessonTime)
+    ? names[m.lessonDay]+'요일 '+m.lessonTime+' · 30분' : '기본 일정 미등록';
+
+  // 이번 달 진행 막대
+  const dots = [];
+  for(let i=0;i<quota;i++)
+    dots.push('<i style="flex:1;height:6px;border-radius:3px;display:block;background:'+
+      (i<done.length?'#C9A961':'var(--surf2)')+'"></i>');
+
+  const now = new Date();
+  const upcoming = mbBookings.filter(b=> slotTime(b.date,b.hour) >= now);
+  const past     = mbBookings.filter(b=> slotTime(b.date,b.hour) <  now).reverse().slice(0,8);
+
+  const c = liveCredits(m);
+  const total = m.weeklyHours || TIER_BASE;
+  const used  = m.usedThisCycle || 0;
+  const base  = m.baseHours || TIER_BASE;
+  const tier  = base>=TIER_UP ? '기본 주 5시간 확정'
+              : total>=TIER_UP ? '주 5시간 확장 중 · '+(m.fullStreak||0)+'/'+CONFIRM_WEEKS+'주'
+              : '주 3시간';
+
+  document.getElementById('pgMember').innerHTML =
+    '<div class="row">'+
+      '<button class="btn sm" data-act="backMembers">‹ 회원 목록</button>'+
+      '<div class="spacer"></div>'+
+      '<button class="btn sm" data-act="editMember" data-key="'+m.key+'">설정</button>'+
+    '</div>'+
+
+    /* ── 사람 ── */
+    '<div class="h1" style="font-size:22px;margin-top:14px">'+esc(m.name||'이름 없음')+'</div>'+
+    '<div class="card flat" style="margin-top:12px">'+
+      kv('연락처', m.phone||'—')+
+      (m.kakao
+        ? '<div class="row" style="padding:11px 0;border-bottom:1px solid var(--line-soft)">'+
+            '<div class="sub" style="width:84px">카카오톡</div>'+
+            '<div style="flex:1;font-size:14px;min-width:0">'+kakaoLink(m.kakao)+'</div></div>'
+        : kv('카카오톡','—'))+
+      kv('학부모', (m.guardianName||m.guardianPhone)
+          ? [m.guardianName, m.guardianPhone].filter(Boolean).join(' · ') : '—')+
+      kv('구글 주소', m.email||'—')+
+      kv('기본 레슨', basis, true)+
+    '</div>'+
+    (m.memo
+      ? '<div class="card flat" style="margin-top:10px">'+
+          '<div class="sub gold" style="margin-bottom:6px">메모</div>'+
+          '<div style="font-size:14px;line-height:1.7;white-space:pre-wrap">'+esc(m.memo)+'</div></div>'
+      : '')+
+
+    /* ── 레슨 ── */
+    '<div class="sec"><span>이번 달 레슨</span>'+
+      '<span class="gold">'+done.length+' / '+quota+'회</span></div>'+
+    '<div class="card">'+
+      '<div class="row" style="gap:5px">'+dots.join('')+'</div>'+
+      (done.length
+        ? '<div style="margin-top:14px">'+ done.map(x=>lessonRow(x)).join('') +'</div>'
+        : '<div class="sub muted" style="margin-top:13px">이번 달 기록이 아직 없어요</div>')+
+      '<button class="cta" style="height:50px;margin-top:14px" data-act="lessonNew">'+
+        '레슨 완료 처리</button>'+
+      '<div class="sub muted" style="font-size:11px;margin-top:8px;line-height:1.6">'+
+        '날짜와 시각을 조정해서 기록할 수 있어요. 연습권은 지급 여부를 고를 수 있습니다.</div>'+
+    '</div>'+
+
+    /* ── 레슨비 ── */
+    '<div class="sec"><span>레슨비</span><span class="muted">'+
+      (now.getMonth()+1)+'월</span></div>'+
+    '<div class="card">'+
+      '<div class="row">'+
+        '<div>'+
+          '<div class="num" style="font-size:17px;color:'+(paid?'#9FD2A8':'var(--red-l)')+'">'+
+            (paid?'입금 확인됨':'아직 확인 안 됨')+'</div>'+
+          '<div class="sub muted" style="margin-top:4px;font-size:11px">'+
+            esc(paidSummary(m))+'</div>'+
+        '</div>'+
+        '<div class="spacer"></div>'+
+        '<button class="btn '+(paid?'':'primary')+'" style="height:42px" '+
+          'data-act="togglePay" data-key="'+m.key+'">'+(paid?'확인 취소':'입금 확인')+'</button>'+
+      '</div></div>'+
+
+    /* ── 연습권 ── */
+    '<div class="sec"><span>연습권</span><span class="muted">'+esc(tier)+'</span></div>'+
+    '<div class="card">'+
+      '<div class="row" style="align-items:baseline;gap:6px">'+
+        '<div class="big">'+c+'</div><div class="muted" style="font-size:17px">시간</div>'+
+        '<div class="spacer"></div>'+
+        '<div class="sub">'+(m.expiresAt? fmtDate(m.expiresAt)+' 소멸':'미지급')+'</div>'+
+      '</div>'+
+      '<div class="bar" style="margin-top:9px"><i style="width:'+
+        (total?Math.round(used/total*100):0)+'%"></i></div>'+
+      '<div class="sub muted" style="margin-top:8px;font-size:11px">'+
+        '이번 주기 '+used+' / '+total+'시간 사용</div>'+
+    '</div>'+
+
+    /* ── 예약 ── */
+    '<div class="sec"><span>다가오는 예약</span><span>'+upcoming.length+'건</span></div>'+
+    (upcoming.length ? upcoming.map(b=>mbBookingRow(b,true)).join('')
+      : '<div class="empty">예정된 예약이 없어요</div>')+
+
+    '<div class="sec"><span>지난 기록</span><span class="muted">최근 '+past.length+'건</span></div>'+
+    (past.length ? past.map(b=>mbBookingRow(b,false)).join('')
+      : '<div class="empty">아직 기록이 없어요</div>')+
+
+    '<div style="height:18px"></div>';
+
+  bind('pgMember');
+}
+
+function kakaoLink(v){
+  const t = String(v||'').trim();
+  if(/^https?:\/\//i.test(t))
+    return '<a href="'+esc(t)+'" target="_blank" rel="noopener" '+
+           'style="word-break:break-all">카카오톡 열기 ↗</a>';
+  return esc(t);
+}
+function paidSummary(m){
+  const list = (m.paidMonths||[]).slice().sort().reverse().slice(0,3);
+  return list.length ? '확인한 달 · '+list.join(', ') : '확인한 달 없음';
+}
+function lessonRow(x){
+  const t = x.time ? ' '+x.time : '';
+  return '<button class="lrow" data-act="lessonEdit" data-id="'+x.id+'">'+
+    '<span class="d">'+fmtDate(x.date)+t+'</span>'+
+    '<span class="n">'+(x.grantedHours ? '연습권 '+x.grantedHours+'시간' : '기록만')+'</span>'+
+    '<span class="go">수정</span></button>';
+}
+function mbBookingRow(b, future){
+  const r = roomOf(b.roomId);
+  const lesson = b.kind==='lesson';
+  return '<div class="card flat" style="padding:12px 14px;margin-bottom:8px">'+
+    '<div class="row">'+
+      '<div style="width:4px;height:30px;border-radius:2px;flex-shrink:0;background:'+
+        (lesson?'#C9A961':r.color)+'"></div>'+
+      '<div style="flex:1;font-size:14px">'+fmtDate(b.date)+' '+pad(b.hour)+':00</div>'+
+      '<div class="sub" style="color:'+(lesson?'#E3CFA6':r.color)+'">'+
+        r.name+(lesson?' · 레슨':'')+'</div>'+
+      (future ? '<button class="btn sm" data-act="admCancelAny" data-id="'+b.id+'">취소</button>' : '')+
     '</div></div>';
 }
 
@@ -1077,9 +1358,14 @@ async function handle(d){
     case 'admSlot': admSlot(d.r, Number(d.h)); break;
     case 'admCancel': admCancel(d.id); break;
     case 'blockMode': go('today'); toast('빈 칸을 누르면 차단할 수 있어요'); break;
-    case 'lesson':  confirmLesson(d.key); break;
     case 'addMember': formMember(null); break;
     case 'editMember': formMember(members.find(m=>m.key===d.key)); break;
+    case 'openMember': openMember(d.key); break;
+    case 'backMembers': selMember=''; go('members'); break;
+    case 'lessonNew':  lessonForm(null); break;
+    case 'lessonEdit': lessonForm(mbLessons.find(x=>x.id===d.id)); break;
+    case 'togglePay':  togglePay(d.key); break;
+    case 'admCancelAny': admCancelAny(d.id); break;
   }
 }
 
@@ -1303,6 +1589,134 @@ function admCancel(id){
   });
 }
 
+/* ===================== 관리자 · 회원 상세 동작 ===================== */
+function openMember(key){
+  const m = members.find(x=>x.key===key);
+  if(!m) return;
+  selMember = key;
+  subscribeMember(m.mid || m.key);
+  go('member');
+}
+
+/** 레슨비 입금 확인 달을 켜고 끈다 */
+async function togglePay(key){
+  const m = members.find(x=>x.key===key);
+  if(!m) return;
+  const month = monthKey(new Date());
+  const list  = (m.paidMonths||[]).slice();
+  const i = list.indexOf(month);
+  if(i >= 0) list.splice(i,1); else list.push(month);
+  try{
+    await updateDoc(doc(db,'members',key), { paidMonths:list });
+    toast(i>=0 ? '입금 확인을 취소했어요' : '입금을 확인했어요');
+  }catch(e){ console.error(e); toast('저장에 실패했어요'); }
+}
+
+/** 상세 화면에서 예약·레슨 일정을 취소한다 */
+function admCancelAny(id){
+  const b = mbBookings.find(x=>x.id===id);
+  if(!b) return;
+  ask({
+    title: b.kind==='lesson' ? '레슨 일정을 지울까요?' : '이 예약을 취소할까요?',
+    body: fmtDate(b.date)+' '+pad(b.hour)+':00 · '+roomOf(b.roomId).name,
+    ok: b.kind==='lesson' ? '레슨 삭제' : '예약 취소',
+    onOk: async ()=>{
+      try{ await deleteDoc(doc(db,'bookings',id)); toast('처리했어요'); }
+      catch(e){ console.error(e); toast('처리에 실패했어요'); }
+    }
+  });
+}
+
+/**
+ * 레슨 완료 기록 — 새로 남기거나 이미 남긴 것을 고친다.
+ * 기본 일정이 있어도 실제로는 조율되는 일이 많아 날짜·시각을 직접 넣게 했다.
+ */
+function lessonForm(x){
+  const m = members.find(y=>y.key===selMember);
+  if(!m) return;
+  const isNew = !x;
+  const now = new Date();
+  const t = nextTier(m);
+
+  // 새로 남길 때는 가장 가까운 예정 레슨을 기본값으로 끌어온다
+  let defDate = ymd(now), defTime = m.lessonTime || pad(now.getHours())+':00';
+  if(isNew){
+    const planned = mbBookings
+      .filter(b=>b.kind==='lesson' && slotTime(b.date,b.hour) <= now)
+      .sort((a,b)=>(b.date+pad(b.hour)).localeCompare(a.date+pad(a.hour)))[0];
+    if(planned){ defDate = planned.date; defTime = pad(planned.hour)+':00'; }
+  }
+
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal">'+
+      '<h3>'+(isNew?'레슨 완료 처리':'레슨 기록 수정')+'</h3>'+
+      '<p>'+esc(m.name||'회원')+'</p>'+
+      '<div class="col" style="margin-top:16px">'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1.3"><label for="lsDate">날짜</label>'+
+            '<input id="lsDate" type="date" value="'+esc(isNew?defDate:(x.date||defDate))+'"></div>'+
+          '<div style="flex:1"><label for="lsTime">시각</label>'+
+            '<input id="lsTime" type="time" value="'+esc(isNew?defTime:(x.time||''))+'"></div>'+
+        '</div>'+
+        '<div><label for="lsNote">메모 (선택)</label>'+
+          '<input id="lsNote" value="'+esc(isNew?'':(x.memo||''))+'" placeholder="진도·특이사항"></div>'+
+        (isNew
+          ? '<label class="chk"><input type="checkbox" id="lsGrant" checked>'+
+            '<span>연습권 '+t.next+'시간도 함께 지급 ('+CREDIT_DAYS+'일 뒤 소멸)</span></label>'+
+            '<div class="sub muted" style="font-size:11px;line-height:1.6">'+esc(t.note)+'</div>'
+          : '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
+            (x.grantedHours ? '이 기록으로 연습권 '+x.grantedHours+'시간을 지급했습니다.<br>'+
+              '기록을 고쳐도 이미 지급한 연습권은 그대로입니다.' : '연습권 지급 없이 기록만 남긴 건입니다.')+
+            '</div>')+
+        '<div class="row" style="gap:9px;margin-top:6px">'+
+          '<button class="btn" style="flex:1;height:48px" id="lsCancel">취소</button>'+
+          '<button class="btn primary" style="flex:1;height:48px" id="lsSave">저장</button>'+
+        '</div>'+
+        (isNew ? '' :
+          '<button class="btn" style="height:44px;color:var(--red-l);border-color:#5A2A26" '+
+          'id="lsDel">이 기록 삭제</button>')+
+      '</div></div></div>';
+
+  host.querySelector('#lsCancel').onclick = closeModal;
+
+  if(!isNew) host.querySelector('#lsDel').onclick = ()=>{
+    closeModal();
+    ask({ title:'레슨 기록을 지울까요?',
+      body: fmtDate(x.date)+(x.time?' '+x.time:'')+'<br><br>'+
+            '<span class="muted">이미 지급한 연습권은 그대로 남습니다.</span>',
+      ok:'삭제', onOk: async ()=>{
+        try{ await deleteDoc(doc(db,'lessons',x.id)); toast('기록을 지웠어요'); }
+        catch(e){ console.error(e); toast('삭제에 실패했어요'); }
+      }});
+  };
+
+  host.querySelector('#lsSave').onclick = async ()=>{
+    const date = host.querySelector('#lsDate').value;
+    const time = host.querySelector('#lsTime').value;
+    const memo = host.querySelector('#lsNote').value.trim();
+    if(!date){ toast('날짜를 입력해 주세요'); return; }
+    const grant = isNew && host.querySelector('#lsGrant').checked;
+    closeModal();
+    try{
+      if(isNew){
+        await addDoc(collection(db,'lessons'), {
+          memberId: (m.mid||m.key), memberName: m.name||'',
+          date, time: time||'', month: date.slice(0,7), memo,
+          grantedHours: grant ? t.next : 0,
+          usedBefore: t.used, note: grant ? t.note : '기록만',
+          createdAt: serverTimestamp()
+        });
+        if(grant) await grantCredits(m, t);
+        toast(grant ? '레슨 완료 · 연습권을 지급했어요' : '레슨 기록을 남겼어요');
+      } else {
+        await updateDoc(doc(db,'lessons',x.id), { date, time: time||'', month: date.slice(0,7), memo });
+        toast('기록을 수정했어요');
+      }
+    }catch(e){ console.error(e); toast('저장에 실패했어요'); }
+  };
+}
+
 /* ===================== 연습권 티어 계산 ===================== */
 /**
  * 주 3시간으로 시작 → 다 채우면 다음 주 5시간
@@ -1346,46 +1760,19 @@ function nextTier(m){
   return { next, base, streak, note, used };
 }
 
-function confirmLesson(key){
-  const m = members.find(x=>x.key===key);
-  if(!m) return;
-  const t = nextTier(m);
-  ask({
-    title: esc(m.name||'회원')+' · 레슨 완료',
-    body: t.note+'<br><br><span style="color:var(--white-room)">연습권 '+t.next+'시간을 지급하고<br>'+
-          CREDIT_DAYS+'일 뒤 소멸됩니다.</span>',
-    ok:'지급하기',
-    onOk: ()=> grantLesson(m, t)
+/** 연습권만 지급한다. 레슨 기록은 lessonForm 쪽에서 남긴다. */
+async function grantCredits(m, t){
+  const expires = ymd(addDays(new Date(), CREDIT_DAYS));
+  await updateDoc(doc(db,'members',m.key), {
+    credits: t.next,
+    weeklyHours: t.next,
+    usedThisCycle: 0,
+    baseHours: t.base,
+    fullStreak: t.streak,
+    cycles: (m.cycles||0) + 1,
+    expiresAt: expires,
+    lastLessonAt: serverTimestamp()
   });
-}
-async function grantLesson(m, t){
-  const now = new Date();
-  const expires = ymd(addDays(now, CREDIT_DAYS));
-  const month = now.getFullYear()+'-'+pad(now.getMonth()+1);
-  const sameMonth = m.lessonMonth === month;
-  try{
-    await updateDoc(doc(db,'members',m.key), {
-      credits: t.next,
-      weeklyHours: t.next,
-      usedThisCycle: 0,
-      baseHours: t.base,
-      fullStreak: t.streak,
-      cycles: (m.cycles||0) + 1,
-      expiresAt: expires,
-      lessonMonth: month,
-      lessonsThisMonth: sameMonth ? (m.lessonsThisMonth||0)+1 : 1,
-      lastLessonAt: serverTimestamp()
-    });
-    await addDoc(collection(db,'lessons'), {
-      memberId: (m.mid||m.key), memberName: m.name||'',
-      date: ymd(now), grantedHours: t.next, usedBefore: t.used,
-      note: t.note, createdAt: serverTimestamp()
-    });
-    info({ title:'연습권을 지급했어요',
-      body: esc(m.name||'회원')+'님에게 '+t.next+'시간<br>'+
-            '<span class="muted">'+esc(t.note)+'</span><br>'+
-            fmtDate(expires)+' 소멸' });
-  }catch(e){ console.error(e); toast('지급에 실패했어요'); }
 }
 
 /* ===================== 관리자 · 회원 추가/설정 ===================== */
@@ -1413,6 +1800,21 @@ function formMember(m){
           '</select></div>'+
           '<div style="flex:1"><label for="fmTime">시각</label><input id="fmTime" type="time" value="'+esc(m?(m.lessonTime||''):'')+'"></div>'+
         '</div>'+
+        '<div><label for="fmQuota">월 레슨 횟수</label>'+
+          '<input id="fmQuota" type="number" min="1" max="30" value="'+
+          ((m&&m.lessonQuota)||LESSON_QUOTA)+'"></div>'+
+        '<div><label for="fmKakao">카카오톡 프로필 링크</label>'+
+          '<input id="fmKakao" value="'+esc(m?(m.kakao||''):'')+'" '+
+          'placeholder="https://open.kakao.com/... 또는 아이디"></div>'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1"><label for="fmGName">학부모 이름</label>'+
+            '<input id="fmGName" value="'+esc(m?(m.guardianName||''):'')+'" placeholder="선택"></div>'+
+          '<div style="flex:1"><label for="fmGPhone">학부모 연락처</label>'+
+            '<input id="fmGPhone" value="'+esc(m?(m.guardianPhone||''):'')+'" placeholder="선택"></div>'+
+        '</div>'+
+        '<div><label for="fmMemo">메모</label>'+
+          '<textarea id="fmMemo" rows="3" placeholder="진도, 성향, 주의할 점 등">'+
+          esc(m?(m.memo||''):'')+'</textarea></div>'+
         (isNew ? '' :
           '<div><label for="fmCredit">연습권 직접 조정 (시간)</label>'+
           '<input id="fmCredit" type="number" min="0" max="20" value="'+(m.credits||0)+'"></div>')+
@@ -1439,10 +1841,16 @@ function formMember(m){
     const dayV  = host.querySelector('#fmDay').value;
     const time  = host.querySelector('#fmTime').value;
     if(!name){ toast('이름을 입력해 주세요'); return; }
+    const quota = Number(host.querySelector('#fmQuota').value);
     const patch = {
       name, phone,
       lessonDay: dayV==='' ? null : Number(dayV),
-      lessonTime: time || null
+      lessonTime: time || null,
+      lessonQuota: (isNaN(quota)||quota<1) ? LESSON_QUOTA : Math.min(30, Math.round(quota)),
+      kakao:         host.querySelector('#fmKakao').value.trim(),
+      guardianName:  host.querySelector('#fmGName').value.trim(),
+      guardianPhone: host.querySelector('#fmGPhone').value.trim(),
+      memo:          host.querySelector('#fmMemo').value.trim()
     };
     if(isNew){
       const email = host.querySelector('#fmEmail').value.trim().toLowerCase();
@@ -1469,15 +1877,20 @@ function formMember(m){
  * 비밀번호를 만들지 않으므로 관리자 로그인이 풀릴 일도 없다.
  * 문서 이름(ID)이 곧 소문자로 바꾼 이메일이다.
  */
-async function createMember({ name, phone, email, lessonDay, lessonTime }){
+async function createMember(p){
+  const { name, phone, email } = p;
   try{
     await setDoc(doc(db,'members', email), {
       mid: newMid(),
       name, phone, email, role:'member', active:true,
-      lessonDay: lessonDay==null?null:lessonDay, lessonTime: lessonTime||null,
+      lessonDay: p.lessonDay==null?null:p.lessonDay, lessonTime: p.lessonTime||null,
+      lessonQuota: p.lessonQuota || LESSON_QUOTA,
+      kakao: p.kakao||'', guardianName: p.guardianName||'',
+      guardianPhone: p.guardianPhone||'', memo: p.memo||'',
+      paidMonths: [],
       credits:0, weeklyHours:TIER_BASE, usedThisCycle:0,
       baseHours:TIER_BASE, fullStreak:0, cycles:0,
-      expiresAt:null, lessonsThisMonth:0, createdAt: serverTimestamp()
+      expiresAt:null, createdAt: serverTimestamp()
     });
     info({ title:'회원을 등록했어요',
       body: esc(name)+'님<br><br>'+
