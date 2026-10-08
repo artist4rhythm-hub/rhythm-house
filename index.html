@@ -216,6 +216,7 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .memcard{display:block;width:100%;text-align:left;margin-bottom:11px;cursor:pointer}
 .memcard:active{background:var(--surf2)}
 .chip.paid{background:#1C3326;border-color:#2F5A3E;color:#9FD2A8}
+.chip.free{background:#1B2A3C;border-color:#2E4661;color:#8FB0D4}
 .chip.unpaid{border-color:#5A2A26;color:var(--red-l)}
 .lrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
   padding:11px 12px;border-radius:11px;background:var(--deep);border:1px solid var(--line-soft);
@@ -426,7 +427,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v15 · 2026-10-08';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v16 · 2026-10-08';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -504,6 +505,17 @@ function nameOf(b){
 }
 
 /**
+ * 이 예약이 연습권을 쓴 것인가.
+ * 레슨, 레슨 뒤 확보 시간, 관리자가 서비스로 넣어준 자리는 쓰지 않는다.
+ * usesCredit이 없는 예전 예약은 '관리자가 넣었으면 안 쓴 것'으로 본다.
+ */
+function usesCredit(b){
+  if(!b || b.kind !== 'practice') return false;
+  if(typeof b.usesCredit === 'boolean') return b.usesCredit;
+  return !b.addedByAdmin;
+}
+
+/**
  * 이번 주기에 쓴 시간 — 따로 저장하지 않고 예약에서 센다.
  * 지나간 예약만 세므로, 예약만 해두고 아직 오지 않은 시간은 들어가지 않는다.
  */
@@ -511,8 +523,9 @@ function usedInCycle(m, list){
   if(!m) return 0;
   const from = m.cycleStart || m.expiresAt || '';
   const now = new Date();
+  // 연습권을 쓴 예약만 센다 — 서비스로 준 자리는 주간 할당량과 무관하다
   return (list||[]).filter(b=>
-    b.kind === 'practice' && (!from || b.date >= from) && slotTime(b.date,b.hour) < now
+    usesCredit(b) && (!from || b.date >= from) && slotTime(b.date,b.hour) < now
   ).length;
 }
 
@@ -1023,6 +1036,8 @@ function bookingCard(b){
         '<div class="sub" style="color:'+(lesson?'#E3CFA6':r.color)+';margin-top:4px">'+
           r.name+' · '+(lesson ? '레슨' : (b.afterLesson ? '레슨 뒤 연습' : '1시간'))+'</div>'+
       '</div>'+
+      (usesCredit(b) ? '' :
+        '<span class="chip free" style="height:22px;font-size:10px;flex-shrink:0">연습권 미차감</span>')+
       (lesson
         ? '<div class="sub muted" style="text-align:right;line-height:1.5">레슨 일정</div>'
         : canCancel
@@ -1209,7 +1224,9 @@ function dayRoomsHTML(){
           attr = ' data-act="admCancel" data-id="'+b.id+'"';
         }
         else if(isMine && b.kind==='practice'){
-          cls+=' mine'; st = b.afterLesson ? '내 연습<br>레슨 뒤' : '내 예약';
+          cls+=' mine';
+          st = b.afterLesson ? '내 연습<br>레슨 뒤'
+             : (usesCredit(b) ? '내 예약' : '내 예약<br>미차감');
           attr = b.afterLesson ? ' data-act="why" data-w="afterlesson"'
                                : ' data-act="cancel" data-id="'+b.id+'"';
         }
@@ -1768,6 +1785,7 @@ async function doBook(hour){
       tx.set(bRef, {
         roomId: selRoom, roomName: r.name, date: selDate, hour,
         memberId: myMid(), kind:'practice',
+        usesCredit: !admin,                 // 관리자 본인 예약은 연습권을 쓰지 않는다
         addedByAdmin: admin, createdAt: serverTimestamp()
       });
       if(!admin){
@@ -1794,15 +1812,16 @@ function confirmCancel(id){
   ask({
     title:'예약을 취소할까요?',
     body: fmtDate(b.date)+' '+pad(b.hour)+':00 · '+roomOf(b.roomId).name+
-          (b.addedByAdmin ? ''
-            : '<br><br><span style="color:var(--white-room)">연습권 1시간이 돌아옵니다.</span>'),
+          (usesCredit(b)
+            ? '<br><br><span style="color:var(--white-room)">연습권 1시간이 돌아옵니다.</span>'
+            : '<br><br><span class="muted">연습권을 쓰지 않은 예약이라 돌아올 연습권은 없어요.</span>'),
     ok:'예약 취소',
     onOk: ()=> doCancel(b)
   });
 }
 async function doCancel(b){
   // 관리자 예약은 차감이 없었으므로 환급도 하지 않는다
-  const refund = !b.addedByAdmin;
+  const refund = usesCredit(b);
   try{
     await runTransaction(db, async tx=>{
       const bRef = doc(db,'bookings',b.id);
@@ -1848,8 +1867,12 @@ function admSlot(roomId, hour){
           '<button class="btn" style="flex:1;height:46px" id="admAdd">회원 예약</button>'+
           '<button class="btn" style="flex:1;height:46px" id="admLesson">레슨으로 잡기</button>'+
         '</div>'+
+        '<label class="chk" style="margin-top:2px">'+
+          '<input type="checkbox" id="admUse">'+
+          '<span>이 예약으로 회원의 <b>연습권 1시간을 차감</b></span></label>'+
         '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
-          '회원 예약과 레슨은 연습권이 차감되지 않습니다.<br>'+
+          '체크하지 않으면 연습권을 쓰지 않고 자리만 잡아줍니다 (기본).<br>'+
+          '전화로 받은 정상 예약을 대신 넣을 때만 체크하세요.<br>'+
           '레슨은 회원을 고르지 않으면 이름 없이 잡힙니다.</div>'+
 
         '<button class="btn" style="height:46px;margin-top:4px" id="admBlock">이 시간 닫기 (사용 불가)</button>'+
@@ -1860,7 +1883,7 @@ function admSlot(roomId, hour){
 
   host.querySelector('#admMine').onclick = async ()=>{
     closeModal();
-    await writeSlot(roomId, hour, { kind:'practice', memberId: myMid() });
+    await writeSlot(roomId, hour, { kind:'practice', memberId: myMid(), usesCredit:false });
     toast('연습실을 잡았어요');
   };
   host.querySelector('#admBlock').onclick = async ()=>{
@@ -1871,9 +1894,11 @@ function admSlot(roomId, hour){
   host.querySelector('#admAdd').onclick = async ()=>{
     const mid = host.querySelector('#admWho').value;
     if(!mid){ toast('회원을 선택해 주세요'); return; }
+    const use = host.querySelector('#admUse').checked;
     closeModal();
-    await writeSlot(roomId, hour, { kind:'practice', memberId:mid });
-    toast('예약을 추가했어요');
+    await writeSlot(roomId, hour, { kind:'practice', memberId:mid, usesCredit:use });
+    if(use) await spendCredit(mid);
+    toast(use ? '예약 추가 · 연습권 1시간 차감' : '예약을 추가했어요 (연습권 차감 없음)');
   };
   host.querySelector('#admLesson').onclick = async ()=>{
     const mid = host.querySelector('#admWho').value;
@@ -1882,6 +1907,16 @@ function admSlot(roomId, hour){
     toast('레슨 일정을 잡았어요');
   };
 }
+/** 관리자가 '차감함'을 골랐을 때만 연습권을 1시간 깎는다 */
+async function spendCredit(mid){
+  const t = members.find(x=>(x.mid||x.key)===mid);
+  if(!t) return;
+  try{
+    await updateDoc(doc(db,'members',t.key),
+      { credits: Math.max(0, (t.credits||0) - 1) });
+  }catch(e){ console.error(e); }
+}
+
 async function writeSlot(roomId, hour, extra){
   const r = roomOf(roomId);
   try{
@@ -1895,7 +1930,7 @@ function admCancel(id){
   const b = dayBookings.find(x=>x.id===id);
   if(!b) return;
   const who = b.kind==='lesson' ? ('레슨 · '+nameOf(b)) : nameOf(b);
-  const refundNote = (b.kind==='practice' && b.memberId && !b.addedByAdmin)
+  const refundNote = usesCredit(b)
     ? '<br><br><span class="muted">회원의 연습권 1시간이 돌아갑니다.</span>' : '';
   ask({
     title: b.kind==='block'  ? '이 시간을 다시 열까요?'
@@ -1905,7 +1940,7 @@ function admCancel(id){
     ok: b.kind==='block' ? '다시 열기' : b.kind==='lesson' ? '레슨 삭제' : '예약 취소',
     onOk: async ()=>{
       try{
-        if(b.kind==='practice' && b.memberId && !b.addedByAdmin){
+        if(usesCredit(b) && b.memberId){
           await runTransaction(db, async tx=>{
             const target = members.find(x=>(x.mid||x.key)===b.memberId);
             if(!target) throw new Error('NOMEMBER');
@@ -2114,7 +2149,8 @@ function planLessons(key){
             roomId:room, roomName:r.name, date:ds, hour:h,
             memberId: (m.mid||m.key),
             kind: isLesson ? 'lesson' : 'practice',
-            ...(isLesson ? { lessonAt: time, durMin: LESSON_MIN } : { afterLesson: true }),
+            ...(isLesson ? { lessonAt: time, durMin: LESSON_MIN }
+                         : { afterLesson: true, usesCredit: false }),
             addedByAdmin:true, createdAt: serverTimestamp()
           });
           any = true;
@@ -2187,7 +2223,8 @@ function moveBooking(id){
         roomId:room, roomName:r.name, date, hour,
         memberId:b.memberId, kind:b.kind||'lesson',
         ...(lesson ? { lessonAt: time, durMin: b.durMin || LESSON_MIN } : {}),
-        ...(b.afterLesson ? { afterLesson:true } : {}),
+        ...(b.afterLesson ? { afterLesson:true, usesCredit:false } : {}),
+        ...(typeof b.usesCredit === 'boolean' ? { usesCredit: b.usesCredit } : {}),
         addedByAdmin:true, createdAt: serverTimestamp()
       });
       if(nid !== b.id) await deleteDoc(doc(db,'bookings',b.id));

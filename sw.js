@@ -1,7 +1,7 @@
 // 리듬 하우스 서비스 워커
 // 앱 껍데기만 캐시하고, 예약 데이터(Firebase)는 항상 네트워크에서 가져옵니다.
 
-const CACHE = 'rhythm-house-v15';
+const CACHE = 'rhythm-house-v16';
 const SHELL = ['./index.html', './board.html', './manifest.json', './logo.png',
                './icon-192.png', './icon-512.png'];
 
