@@ -138,6 +138,43 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
 .legend span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--dim)}
 .legend i{width:11px;height:11px;border-radius:3px;display:block}
 
+/* ---------- 달력 ---------- */
+.cal{background:var(--deep);border:1px solid var(--line);border-radius:14px;padding:12px}
+.calnav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.calnav .m{flex:1;text-align:center;font-family:var(--f-head);font-size:17px}
+.caldow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:5px}
+.caldow span{text-align:center;font-size:11px;color:var(--mute);padding:3px 0}
+.caldow span:first-child{color:#C87A72}
+.caldow span:last-child{color:#7FA3CC}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calcell{min-height:46px;border-radius:10px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;background:transparent;
+  color:var(--cream);font-size:14px;border:1px solid transparent;padding:5px 0}
+.calcell.out{color:#33475C}
+.calcell.off{color:#4C637B}
+.calcell.has{background:var(--surf)}
+.calcell.today{border-color:#3E5F82}
+.calcell.on{background:var(--red);color:#FFF6EC;border-color:var(--red)}
+.calcell .dots{display:flex;gap:3px;height:6px;align-items:center}
+.calcell .dots i{width:6px;height:6px;border-radius:50%;display:block}
+/* 선택된 날은 배경이 빨개서 같은 색 점이 묻힌다 — 밝게 바꾼다 */
+.calcell.on .dots i{background:#FFE9E3 !important;box-shadow:none}
+
+/* ---------- 두 연습실 나란히 ---------- */
+.rooms2{display:grid;grid-template-columns:34px 1fr 1fr;gap:4px;align-items:center}
+.rooms2 .rh{height:34px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-family:var(--f-head)}
+.rooms2 .hr{font-size:11px;color:var(--mute);text-align:right;padding-right:5px}
+.cell2{height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surf);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cream);
+  width:100%;padding:0 4px;text-align:center;line-height:1.3}
+.cell2.taken{background:#0D1826;border-color:#1A2A3C;color:#5E7389}
+.cell2.mine{background:var(--red);border-color:var(--red);color:#FFF6EC}
+.cell2.lesson{background:#2B2518;border-color:#8A7442;color:#E3CFA6}
+.cell2.blocked{background:transparent;border-style:dashed;border-color:#3A5570;color:var(--mute)}
+.cell2.past{background:transparent;border-color:var(--line-soft);color:#44596E}
+.verline{text-align:center;font-size:10px;color:#3E5168;padding:18px 0 4px;letter-spacing:.5px}
+
 /* ---------- 날짜별 / 주간 전환 ---------- */
 .modes{display:flex;gap:5px;background:var(--surf);border:1px solid var(--line);
   border-radius:13px;padding:4px;margin-top:14px}
@@ -300,6 +337,7 @@ a{color:var(--red-l)}
   <div class="foot">
     문의 <a href="tel:01065178291">010-6517-8291</a>
     <div class="keys">ACOUSTIC · TRAINING · REPEAT</div>
+    <div class="verline" id="verLogin"></div>
   </div>
 </div>
 
@@ -388,6 +426,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
+const APP_VERSION     = 'v14 · 2026-10-08';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -403,6 +442,7 @@ let scrolledFor = null;     // 현황 타임라인 자동 스크롤을 한 날�
 let bookMode  = 'day';      // 예약 화면: day | week
 let adminMode = 'day';      // 현황 화면: day | week
 let weekStart = '';         // 주간 보기의 월요일
+let calMonth  = '';         // 달력이 보고 있는 달
 let myLessons = [];         // 내 레슨 완료 기록
 let allLessons = [];        // (관리자) 이번 달 전체 레슨 기록 — 목록에 회차를 띄우려고
 let selMember = '';         // (관리자) 지금 들여다보는 회원의 key
@@ -420,6 +460,11 @@ function pad(n){ return String(n).padStart(2,'0'); }
 function dow(d){ return ['일','월','화','수','목','금','토'][d.getDay()]; }
 function fmtDate(s){ const d=parseYmd(s); return (d.getMonth()+1)+'월 '+d.getDate()+'일 ('+dow(d)+')'; }
 function slotTime(dateStr, hour){ const d=parseYmd(dateStr); d.setHours(hour,0,0,0); return d; }
+/** 달력을 n달 옮긴다 */
+function shiftMonth(ds, n){
+  const d = parseYmd(ds || ymd(new Date()));
+  return ymd(new Date(d.getFullYear(), d.getMonth()+n, 1));
+}
 /** 그 날짜가 속한 주의 월요일 */
 function startOfWeek(s){
   const d = parseYmd(s), w = d.getDay();      // 0=일요일
@@ -625,6 +670,7 @@ onAuthStateChanged(auth, async (user)=>{
   buildNav();
   if(isAdmin()) subscribeMembers();   // 예약 추가 모달에서 회원 목록이 필요
   weekStart = startOfWeek(ymd(new Date()));
+  calMonth  = ymd(new Date());
   subscribeWeek();                    // 주간 보기 + 홈의 종료 임박 안내에 쓰인다
   go(isAdmin() ? 'today' : 'home');
 
@@ -1025,79 +1071,126 @@ function renderBook(){
     '<div class="row"><div class="h1" style="font-size:19px">예약하기</div><div class="spacer"></div>'+
       '<span class="chip">연습권 <b class="gold">'+liveCredits(ME)+'시간</b></span></div>'+
     '<div class="modes">'+
-      '<button data-act="bookMode" data-m="day"  class="'+(bookMode==='day' ?'on':'')+'">날짜별</button>'+
+      '<button data-act="bookMode" data-m="day"  class="'+(bookMode==='day' ?'on':'')+'">달력</button>'+
       '<button data-act="bookMode" data-m="week" class="'+(bookMode==='week'?'on':'')+'">주간 한눈에</button>'+
     '</div>';
   document.getElementById('pgBook').innerHTML =
     head + (bookMode==='week' ? (weekNav()+weekGrid()) : bookDayHTML());
   bind('pgBook');
 }
+/**
+ * 예약 화면 — 위는 달력, 아래는 그 날의 두 연습실 시간표.
+ * 달력에는 내 예약·내 레슨·끝난 레슨이 점으로 찍혀서
+ * "내가 언제 연습했고 다음 레슨이 언제인지"가 한눈에 들어온다.
+ */
 function bookDayHTML(){
-  const today = new Date();
-  const dates = [];
-  for(let i=0;i<BOOK_AHEAD_DAYS;i++){
-    const d = addDays(today,i);
-    dates.push({ s:ymd(d), d:d.getDate(), w:dow(d) });
-  }
-  const c = liveCredits(ME);
+  return calendarHTML() + dayRoomsHTML();
+}
+
+function calendarHTML(){
+  const base   = parseYmd(calMonth || ymd(new Date()));
+  const y = base.getFullYear(), mo = base.getMonth();
+  const first  = new Date(y, mo, 1);
+  const start  = addDays(first, -((first.getDay()+6)%7));   // 월요일 시작
+  const todayS = ymd(new Date());
+  const lastBookable = ymd(addDays(new Date(), BOOK_AHEAD_DAYS-1));
   const admin = isAdmin();
 
   const cells = [];
-  for(let h=0; h<24; h++){
-    const b = dayBookings.find(x=> x.roomId===selRoom && x.hour===h);
-    const past = slotTime(selDate,h) <= new Date();
-    let cls='slot', st='가능', attr='';
+  for(let i=0;i<42;i++){
+    const d  = addDays(start, i);
+    const ds = ymd(d);
+    if(i>=35 && d.getMonth()!==mo) break;      // 6주차가 비면 그리지 않는다
 
-    if(b){
-      const isMine = b.memberId === myMid();
-      if(admin){
-        // 관리자는 왜 막혔는지 다 보여야 운영이 된다
-        if(b.kind==='block'){       cls+=' blocked'; st='사용 불가'; }
-        else if(b.kind==='lesson'){ cls+=' lesson';  st = esc(nameOf(b))+' 레슨'; }
-        else if(isMine){            cls+=' mine';    st='내 예약'; }
-        else {                      cls+=' taken';   st = esc(nameOf(b)); }
-        attr = ' data-act="admCancel" data-id="'+b.id+'"';
-      }
-      else if(isMine && b.kind==='practice'){
-        cls+=' mine'; st='내 예약';
-        attr = ' data-act="cancel" data-id="'+b.id+'"';
-      }
-      else if(isMine && b.kind==='lesson'){
-        cls+=' lesson'; st='내 레슨';
-        attr = ' data-act="why" data-w="mylesson"';
-      }
-      else {
-        // 남의 예약이든 남의 레슨이든 닫아둔 시간이든 회원에게는 모두 똑같다.
-        // 누가 왜 막았는지는 알 필요도 없고 알아서도 안 된다.
-        cls+=' taken'; st='사용 불가';
-        attr = ' data-act="why" data-w="taken"';
-      }
-    }
-    else if(past){ cls+=' past'; st='지난 시간'; }
-    else { attr = ' data-act="book" data-h="'+h+'"'; }
+    const mineB   = myBookings.filter(b=>b.date===ds);
+    const hasBook = mineB.some(b=>b.kind==='practice');
+    const hasLes  = mineB.some(b=>b.kind==='lesson');
+    const doneLes = myLessons.some(x=>x.date===ds);
 
-    cells.push('<button class="'+cls+'"'+attr+'><span class="hr">'+pad(h)+'</span><span class="st">'+st+'</span></button>');
+    let cls = 'calcell';
+    if(d.getMonth()!==mo) cls += ' out';
+    else if(!admin && (ds < todayS || ds > lastBookable)) cls += ' off';
+    if(mineB.length || doneLes) cls += ' has';
+    if(ds === todayS) cls += ' today';
+    if(ds === selDate) cls += ' on';
+
+    const dots = [];
+    if(hasBook) dots.push('<i style="background:var(--red)"></i>');
+    if(hasLes)  dots.push('<i style="background:#C9A961"></i>');
+    if(doneLes && !hasLes) dots.push('<i style="background:#6B5B33"></i>');
+
+    cells.push('<button class="'+cls+'" data-act="calPick" data-d="'+ds+'">'+
+      '<span>'+d.getDate()+'</span>'+
+      '<span class="dots">'+dots.join('')+'</span></button>');
   }
 
-  return '<div class="sec">날짜</div>'+
-    '<div class="dates">'+ dates.map(d=>
-      '<button data-act="date" data-d="'+d.s+'" class="'+(d.s===selDate?'on':'')+'">'+
-        '<span class="w">'+d.w+'</span><span class="d">'+d.d+'</span></button>').join('') +'</div>'+
+  return '<div class="cal" style="margin-top:14px">'+
+      '<div class="calnav">'+
+        '<button class="btn sm" data-act="calShift" data-n="-1">‹</button>'+
+        '<div class="m">'+y+'년 '+(mo+1)+'월</div>'+
+        '<button class="btn sm" data-act="calShift" data-n="1">›</button>'+
+        '<button class="btn sm" data-act="calToday">오늘</button>'+
+      '</div>'+
+      '<div class="caldow">'+['월','화','수','목','금','토','일']
+        .map(w=>'<span>'+w+'</span>').join('')+'</div>'+
+      '<div class="calgrid">'+cells.join('')+'</div>'+
+      '<div class="legend" style="margin:12px 0 0">'+
+        '<span><i style="background:var(--red)"></i>내 예약</span>'+
+        '<span><i style="background:#C9A961"></i>예정된 레슨</span>'+
+        '<span><i style="background:#6B5B33"></i>끝난 레슨</span>'+
+      '</div>'+
+    '</div>';
+}
 
-    '<div class="sec">연습실</div>'+
-    '<div class="rooms">'+ ROOMS.map(r=>
-      '<button data-act="room" data-r="'+r.id+'" class="'+(r.id===selRoom?'on':'')+'">'+r.name+'</button>').join('') +'</div>'+
+function dayRoomsHTML(){
+  const admin = isAdmin();
+  const now = new Date();
 
-    '<div class="sec"><span>시간 · 24시간 운영</span><span class="muted">1회 1시간</span></div>'+
-    '<div class="legend">'+
-      '<span><i style="background:var(--surf);border:1px solid var(--line)"></i>가능</span>'+
-      '<span><i style="background:var(--red)"></i>내 예약</span>'+
-      '<span><i style="background:#2B2518;border:1px solid #8A7442"></i>'+(admin?'레슨':'내 레슨')+'</span>'+
-      '<span><i style="background:#0D1826;border:1px solid #1A2A3C"></i>'+(admin?'예약 완료':'사용 불가')+'</span>'+
-      (admin ? '<span><i style="border:1px dashed #3A5570"></i>닫은 시간</span>' : '')+
+  const rows = [];
+  for(let h=0; h<24; h++){
+    const tds = ROOMS.map(r=>{
+      const b = dayBookings.find(x=> x.roomId===r.id && x.hour===h);
+      const past = slotTime(selDate,h) <= now;
+      let cls='cell2', st='가능', attr='';
+
+      if(b){
+        const isMine = b.memberId === myMid();
+        if(admin){
+          if(b.kind==='block'){       cls+=' blocked'; st='사용 불가'; }
+          else if(b.kind==='lesson'){ cls+=' lesson';  st = esc(nameOf(b))+' 레슨'; }
+          else if(isMine){            cls+=' mine';    st='내 예약'; }
+          else {                      cls+=' taken';   st = esc(nameOf(b)); }
+          attr = ' data-act="admCancel" data-id="'+b.id+'"';
+        }
+        else if(isMine && b.kind==='practice'){
+          cls+=' mine'; st='내 예약';
+          attr = ' data-act="cancel" data-id="'+b.id+'"';
+        }
+        else if(isMine && b.kind==='lesson'){
+          cls+=' lesson'; st='내 레슨';
+          attr = ' data-act="why" data-w="mylesson"';
+        }
+        else {
+          cls+=' taken'; st='사용 불가';
+          attr = ' data-act="why" data-w="taken"';
+        }
+      }
+      else if(past && !admin){ cls+=' past'; st='지난 시간'; }
+      else { attr = ' data-act="book" data-h="'+h+'" data-r="'+r.id+'"'; }
+
+      return '<button class="'+cls+'"'+attr+'>'+st+'</button>';
+    }).join('');
+    rows.push('<div class="hr">'+pad(h)+'</div>'+tds);
+  }
+
+  return '<div class="sec"><span>'+fmtDate(selDate)+'</span>'+
+      '<span class="muted">1회 1시간</span></div>'+
+    '<div class="rooms2">'+
+      '<div></div>'+
+      ROOMS.map(r=>'<div class="rh" style="background:'+r.fill+';color:'+r.ink+'">'+
+        r.name+'</div>').join('')+
+      rows.join('')+
     '</div>'+
-    '<div class="grid">'+cells.join('')+'</div>'+
-
     (admin
       ? '<div class="sub muted" style="margin-top:12px">빈 칸을 누르면 내 연습·레슨·회원 예약·차단을 고를 수 있어요.</div>'
       : '<div class="sub muted" style="margin-top:12px">회색 칸은 이미 찬 시간이에요. 누가 썼는지는 서로 보이지 않습니다.</div>');
@@ -1133,7 +1226,9 @@ function renderMe(){
         '<div class="sub" style="color:'+r.color+'">'+r.name+'</div></div></div>';
     }).join('') : '<div class="empty">아직 기록이 없어요</div>')+
     '<div class="foot" style="padding-top:26px">'+
-      '리듬 하우스 · 경기 용인시 기흥구 농서동 455, 3층 345호<div class="keys">ACOUSTIC · TRAINING · REPEAT</div></div>';
+      '리듬 하우스 · 경기 용인시 기흥구 농서동 455, 3층 345호'+
+      '<div class="keys">ACOUSTIC · TRAINING · REPEAT</div>'+
+      '<div class="verline">'+APP_VERSION+'</div></div>';
 }
 function kv(k,v,last){
   return '<div class="row" style="padding:11px 0'+(last?'':';border-bottom:1px solid var(--line-soft)')+'">'+
@@ -1419,6 +1514,20 @@ function renderMemberDetail(){
     '</div>'+
 
     /* ── 예약 ── */
+    '<div class="sec"><span>레슨 일정</span>'+
+      '<span class="muted">연습실도 함께 선점</span></div>'+
+    '<div class="card flat">'+
+      '<div class="row">'+
+        '<div style="min-width:0">'+
+          '<div style="font-size:14px">'+esc(basis)+'</div>'+
+          '<div class="sub muted" style="font-size:11px;margin-top:4px;line-height:1.6">'+
+            quota+'회를 한 번에 잡아두면 회원 화면에 바로 뜹니다</div>'+
+        '</div>'+
+        '<div class="spacer"></div>'+
+        '<button class="btn primary" style="height:42px;flex-shrink:0" '+
+          'data-act="planLessons" data-key="'+m.key+'">일정 잡기</button>'+
+      '</div></div>'+
+
     '<div class="sec"><span>다가오는 예약</span><span>'+upcoming.length+'건</span></div>'+
     (upcoming.length ? upcoming.map(b=>mbBookingRow(b,true)).join('')
       : '<div class="empty">예정된 예약이 없어요</div>')+
@@ -1497,7 +1606,10 @@ function mbBookingRow(b, future){
       '<div style="flex:1;font-size:14px">'+fmtDate(b.date)+' '+pad(b.hour)+':00</div>'+
       '<div class="sub" style="color:'+(lesson?'#E3CFA6':r.color)+'">'+
         r.name+(lesson?' · 레슨':'')+'</div>'+
-      (future ? '<button class="btn sm" data-act="admCancelAny" data-id="'+b.id+'">취소</button>' : '')+
+      (future
+        ? '<button class="btn sm" data-act="moveBooking" data-id="'+b.id+'">옮기기</button>'+
+          '<button class="btn sm" data-act="admCancelAny" data-id="'+b.id+'">취소</button>'
+        : '')+
     '</div></div>';
 }
 
@@ -1512,13 +1624,18 @@ async function handle(d){
     case 'goBook':  go('book'); break;
     case 'date':    selDate = d.d; subscribeDay(); renderBook(); break;
     case 'room':    selRoom = d.r; renderBook(); break;
-    case 'book':    confirmBook(Number(d.h)); break;
+    case 'book':    if(d.r) selRoom = d.r; confirmBook(Number(d.h)); break;
     case 'why':     whyBlocked(d.w); break;
     case 'bookMode':  bookMode  = d.m; render(); break;
+    case 'calPick':   selDate = d.d; subscribeDay(); render(); break;
+    case 'calShift':  calMonth = shiftMonth(calMonth, Number(d.n)); render(); break;
+    case 'calToday':  calMonth = ymd(new Date()); selDate = ymd(new Date());
+                      subscribeDay(); render(); break;
     case 'adminMode': adminMode = d.m; render(); break;
     case 'wkShift': weekStart = ymd(addDays(parseYmd(weekStart), Number(d.n)*7));
                     subscribeWeek(); render(); break;
-    case 'wkNow':   weekStart = startOfWeek(ymd(new Date())); subscribeWeek(); render(); break;
+    case 'wkNow':   weekStart = startOfWeek(ymd(new Date()));
+  calMonth  = ymd(new Date()); subscribeWeek(); render(); break;
     case 'wkDay':   selDate = d.d;
                     if(page==='book') bookMode = 'day'; else adminMode = 'day';
                     subscribeDay(); render(); break;
@@ -1536,6 +1653,8 @@ async function handle(d){
     case 'lessonEdit': lessonForm(mbLessons.find(x=>x.id===d.id)); break;
     case 'payForm':    payForm(d.key, d.t); break;
     case 'sortTerms':  sortTerms(d.key); break;
+    case 'planLessons': planLessons(d.key); break;
+    case 'moveBooking': moveBooking(d.id); break;
     case 'weekly':     setWeekly(d.key, Number(d.n)); break;
     case 'admCancelAny': admCancelAny(d.id); break;
   }
@@ -1845,6 +1964,149 @@ function payForm(key, term){
 }
 
 /**
+ * 레슨 일정을 한 번에 여러 주 잡는다.
+ * 등록할 때 시간 협의가 끝나 있으니, 기수 전체를 미리 깔아두는 쪽이 자연스럽다.
+ * 회원 화면에는 바로 '다음 레슨'으로 뜬다.
+ */
+function planLessons(key){
+  const m = members.find(x=>x.key===key);
+  if(!m) return;
+  const quota = m.lessonQuota || LESSON_QUOTA;
+  const now = new Date();
+
+  // 기본값 — 그 회원의 기본 요일·시각에서 가장 가까운 앞날
+  let d0 = addDays(now, 1);
+  if(m.lessonDay != null){
+    for(let i=1;i<=7;i++){
+      const d = addDays(now, i);
+      if(d.getDay() === m.lessonDay){ d0 = d; break; }
+    }
+  }
+  const defTime = m.lessonTime || '16:00';
+
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal">'+
+      '<h3>레슨 일정 미리 잡기</h3>'+
+      '<p>'+esc(m.name||'회원')+' · 연습실도 함께 선점됩니다</p>'+
+      '<div class="col" style="margin-top:16px">'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1.3"><label for="plDate">첫 레슨 날짜</label>'+
+            '<input id="plDate" type="date" value="'+ymd(d0)+'"></div>'+
+          '<div style="flex:1"><label for="plTime">시각</label>'+
+            '<input id="plTime" type="time" value="'+esc(defTime)+'"></div>'+
+        '</div>'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1"><label for="plRoom">연습실</label>'+
+            '<select id="plRoom">'+ROOMS.map(r=>
+              '<option value="'+r.id+'">'+r.name+'</option>').join('')+'</select></div>'+
+          '<div style="flex:1"><label for="plCount">횟수</label>'+
+            '<input id="plCount" type="number" min="1" max="12" value="'+quota+'"></div>'+
+        '</div>'+
+        '<div><label for="plEvery">간격</label>'+
+          '<select id="plEvery">'+
+            '<option value="7">매주 같은 요일</option>'+
+            '<option value="14">격주</option>'+
+          '</select></div>'+
+        '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
+          '이미 찬 시간은 건너뜁니다. 나중에 날짜가 바뀌면 '+
+          '아래 <b>다가오는 예약</b>에서 그 레슨을 눌러 옮길 수 있어요.</div>'+
+        '<div class="row" style="gap:9px;margin-top:6px">'+
+          '<button class="btn" style="flex:1;height:48px" id="plCancel">취소</button>'+
+          '<button class="btn primary" style="flex:1;height:48px" id="plSave">일정 잡기</button>'+
+        '</div>'+
+      '</div></div></div>';
+
+  host.querySelector('#plCancel').onclick = closeModal;
+  host.querySelector('#plSave').onclick = async ()=>{
+    const date  = host.querySelector('#plDate').value;
+    const time  = host.querySelector('#plTime').value;
+    const room  = host.querySelector('#plRoom').value;
+    const count = Math.max(1, Math.min(12, Number(host.querySelector('#plCount').value)||quota));
+    const every = Number(host.querySelector('#plEvery').value) || 7;
+    if(!date || !time){ toast('날짜와 시각을 입력해 주세요'); return; }
+    const hour = Number(time.slice(0,2));
+    closeModal();
+
+    const r = roomOf(room);
+    let made = 0, skipped = [];
+    for(let i=0;i<count;i++){
+      const ds = ymd(addDays(parseYmd(date), i*every));
+      const id = bookingId(room, ds, hour);
+      try{
+        const snap = await getDoc(doc(db,'bookings',id));
+        if(snap.exists()){ skipped.push(fmtDate(ds)); continue; }
+        await setDoc(doc(db,'bookings',id), {
+          roomId:room, roomName:r.name, date:ds, hour,
+          memberId: (m.mid||m.key), kind:'lesson',
+          addedByAdmin:true, createdAt: serverTimestamp()
+        });
+        made++;
+      }catch(e){ console.error(e); skipped.push(fmtDate(ds)); }
+    }
+    info({ title: made ? '레슨 일정을 '+made+'회 잡았어요' : '잡은 일정이 없어요',
+      body: esc(m.name||'회원')+' · '+r.name+' · '+pad(hour)+':00'+
+        (skipped.length
+          ? '<br><br><span class="rose">이미 차 있어 건너뛴 날</span><br>'+
+            '<span class="muted">'+skipped.map(esc).join('<br>')+'</span>'
+          : '<br><br><span class="muted">회원 화면에 다음 레슨으로 바로 보입니다.</span>') });
+  };
+}
+
+/** 잡아둔 레슨 일정을 다른 날짜·시각·연습실로 옮긴다 */
+function moveBooking(id){
+  const b = mbBookings.find(x=>x.id===id);
+  if(!b) return;
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal">'+
+      '<h3>'+(b.kind==='lesson'?'레슨 일정 옮기기':'예약 옮기기')+'</h3>'+
+      '<p>지금 '+fmtDate(b.date)+' '+pad(b.hour)+':00 · '+roomOf(b.roomId).name+'</p>'+
+      '<div class="col" style="margin-top:16px">'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1.3"><label for="mvDate">바꿀 날짜</label>'+
+            '<input id="mvDate" type="date" value="'+esc(b.date)+'"></div>'+
+          '<div style="flex:1"><label for="mvTime">시각</label>'+
+            '<input id="mvTime" type="time" value="'+pad(b.hour)+':00"></div>'+
+        '</div>'+
+        '<div><label for="mvRoom">연습실</label>'+
+          '<select id="mvRoom">'+ROOMS.map(r=>
+            '<option value="'+r.id+'"'+(r.id===b.roomId?' selected':'')+'>'+
+            r.name+'</option>').join('')+'</select></div>'+
+        '<div class="sub muted" style="font-size:11px;line-height:1.6">'+
+          '옮긴 일정은 회원 화면에 바로 반영됩니다.</div>'+
+        '<div class="row" style="gap:9px;margin-top:6px">'+
+          '<button class="btn" style="flex:1;height:48px" id="mvCancel">취소</button>'+
+          '<button class="btn primary" style="flex:1;height:48px" id="mvSave">옮기기</button>'+
+        '</div>'+
+      '</div></div></div>';
+
+  host.querySelector('#mvCancel').onclick = closeModal;
+  host.querySelector('#mvSave').onclick = async ()=>{
+    const date = host.querySelector('#mvDate').value;
+    const time = host.querySelector('#mvTime').value;
+    const room = host.querySelector('#mvRoom').value;
+    if(!date || !time){ toast('날짜와 시각을 입력해 주세요'); return; }
+    const hour = Number(time.slice(0,2));
+    const nid = bookingId(room, date, hour);
+    closeModal();
+    if(nid === b.id){ toast('바뀐 게 없어요'); return; }
+    try{
+      const snap = await getDoc(doc(db,'bookings',nid));
+      if(snap.exists()){ toast('그 시간은 이미 차 있어요'); return; }
+      const r = roomOf(room);
+      await setDoc(doc(db,'bookings',nid), {
+        roomId:room, roomName:r.name, date, hour,
+        memberId:b.memberId, kind:b.kind||'lesson',
+        addedByAdmin:true, createdAt: serverTimestamp()
+      });
+      await deleteDoc(doc(db,'bookings',b.id));
+      toast(fmtDate(date)+' '+pad(hour)+':00으로 옮겼어요');
+    }catch(e){ console.error(e); toast('옮기지 못했어요'); }
+  };
+}
+
+/**
  * 예전 방식(기수 없이) 남긴 기록을 날짜순으로 quota개씩 묶어 기수를 매긴다.
  * 한 번만 쓰는 정리 기능이라 전체를 다시 번호 매긴다.
  */
@@ -2129,6 +2391,9 @@ async function createMember(p){
             '첫 레슨을 마치면 연습권이 지급됩니다.</span>' });
   }catch(e){ console.error(e); toast('등록에 실패했어요'); }
 }
+
+/* 버전을 화면에 적어둔다 — 올린 파일이 제대로 반영됐는지 바로 알 수 있게 */
+document.getElementById('verLogin').textContent = APP_VERSION;
 
 /* ===================== 서비스 워커 ===================== */
 if('serviceWorker' in navigator){
