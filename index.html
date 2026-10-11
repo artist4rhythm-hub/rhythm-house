@@ -63,6 +63,7 @@ label{font-size:13px;color:var(--dim);display:block;margin-bottom:8px}
   body{background:#07121D}
   .wrap{box-shadow:0 0 70px rgba(0,0,0,.55)}
 }
+@media(min-width:680px){ :root{ --maxw:720px } }   /* 아이패드 세로 */
 .topbar{height:calc(58px + var(--sat));flex-shrink:0;display:flex;align-items:center;gap:9px;
   padding:var(--sat) calc(18px + var(--sar)) 0 calc(18px + var(--sal));
   border-bottom:1px solid var(--line-soft);position:sticky;top:0;
@@ -267,6 +268,82 @@ textarea:focus{outline:none;border-color:var(--black-room)}
   .wkhours div{line-height:30px}
 }
 
+/* ---------- 데스크톱 : 아래 막대 대신 왼쪽 세로 메뉴 ----------
+   1100px부터는 화면을 가로로 넓게 쓴다. 메뉴가 왼쪽으로 가고
+   본문은 남은 폭을 전부 쓰되, 글줄이 너무 길어지지 않게 한계를 둔다. */
+@media(min-width:1100px){
+  #scApp{max-width:none;box-shadow:none;padding-left:232px}
+  #scApp .topbar{padding-left:28px;padding-right:calc(28px + var(--sar))}
+  #scApp .topbar img,#scApp .topbar .wordmark{display:none}
+  #scApp .main{padding:26px 34px 40px;max-width:1580px;width:100%}
+  #scApp .nav{top:0;bottom:0;right:auto;left:0;width:232px;height:auto;max-width:none;
+    margin:0;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:5px;
+    border-top:0;border-right:1px solid var(--line);background:#09151F;
+    padding:calc(20px + var(--sat)) 16px 20px calc(16px + var(--sal))}
+  #scApp .nav button{flex:none;width:100%;height:50px;flex-direction:row;gap:13px;
+    justify-content:flex-start;padding:0 14px;border-radius:13px;font-size:14.5px}
+  #scApp .nav button span{font-size:14.5px}
+  #scApp .nav button.on{background:var(--surf2);color:var(--cream)}
+  #scApp .nav button:hover{color:var(--cream)}
+  .navbrand{display:flex !important;align-items:center;gap:10px;
+    padding:4px 14px 22px;border-bottom:1px solid var(--line-soft);margin-bottom:14px}
+  .navbrand img{width:30px;height:31px;object-fit:contain}
+  .navbrand .wordmark{font-size:22px}
+  .toast{left:calc(232px + (100% - 232px)/2);bottom:34px}
+  .overlay{padding-left:calc(232px + 22px)}
+
+  #scApp .modes{max-width:620px}
+  .navbrand .wordmark{white-space:nowrap;font-size:20px}
+
+  /* 두 칸 배치 — 달력·목록을 나란히 */
+  .cols{display:grid;grid-template-columns:390px minmax(0,1fr);gap:24px;align-items:start}
+  .cols.even{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols > *{min-width:0}
+  .cols .sec:first-child{margin-top:0}
+  .statgrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+  .bars{height:190px}
+  .cbar b{font-size:12px}
+  .cbar span{font-size:11px}
+}
+@media(min-width:1500px){
+  .cols{grid-template-columns:440px minmax(0,1fr)}
+}
+.navbrand{display:none}
+
+/* ---------- 통계 ---------- */
+.statgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+.statbox{background:var(--surf);border:1px solid var(--line);border-radius:16px;
+  padding:15px 14px;min-width:0}
+.statbox .n{font-family:var(--f-head);font-size:26px;line-height:1.1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statbox .n small{font-size:14px;color:var(--dim);margin-left:2px}
+.statbox .l{font-size:11.5px;color:var(--dim);margin-top:6px}
+
+.chart{background:var(--deep);border:1px solid var(--line-soft);border-radius:16px;
+  padding:16px 14px 12px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:138px}
+.cbar{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-end}
+.cbar i{display:block;width:100%;max-width:var(--bw,38px);min-height:3px;
+  border-radius:5px 5px 2px 2px;background:var(--black-room)}
+.cbar i.z{background:#14263A}
+.cbar i.hot{background:var(--red)}
+.cbar i.gold{background:var(--white-room)}
+.cbar b{font-family:var(--f-head);font-weight:400;font-size:10.5px;color:var(--dim);
+  line-height:1;margin-bottom:5px}
+.cbar b.off{opacity:0}
+.cbar span{font-size:9.5px;color:var(--mute);margin-top:7px;line-height:1.2;
+  white-space:nowrap;max-width:100%;overflow:hidden}
+.cbar span.off{opacity:0}
+.cbar.now span{color:var(--red-l)}
+
+.mrow{display:block;width:100%;text-align:left;background:var(--surf);
+  border:1px solid var(--line);border-radius:15px;padding:13px 15px;margin-bottom:8px}
+.mrow.on{border-color:var(--black-room)}
+.mrow .track{height:6px;border-radius:3px;background:var(--ground);overflow:hidden;margin-top:10px}
+.mrow .track i{display:block;height:100%;border-radius:3px;background:var(--black-room)}
+.mrow .track i.top{background:var(--red)}
+
 /* ---------- 타임라인 ---------- */
 .tl{display:flex;gap:8px}
 .tl .axis{width:40px;flex-shrink:0}
@@ -383,6 +460,7 @@ a{color:var(--red-l)}
     <section id="pgToday" class="hide"></section>
     <section id="pgMembers" class="hide"></section>
     <section id="pgMember" class="hide"></section>
+    <section id="pgStats" class="hide"></section>
   </div>
 
   <nav class="nav" id="nav"></nav>
@@ -427,7 +505,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v16 · 2026-10-08';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v17 · 2026-10-11';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -452,6 +530,11 @@ let selMember = '';         // (관리자) 지금 들여다보는 회원의 key
 let mbLessons  = [];        // (관리자) 그 회원의 레슨 기록
 let mbBookings = [];        // (관리자) 그 회원의 예약 전체
 let unsubMyLessons = null, unsubMbLessons = null, unsubMbBookings = null, unsubAllLessons = null;
+let statDays  = 28;         // 통계 기간 — 28 / 84 / 365일
+let statWho   = '';         // (관리자) 한 사람만 들여다볼 때의 식별자
+let statRows  = [];         // (관리자) 그 기간의 예약 전체
+let statState = 'idle';     // idle | load | done | fail
+let statKey   = '';         // 지금 담겨 있는 자료의 시작일 (같으면 다시 안 부른다)
 
 /* ===================== 유틸 ===================== */
 function ymd(d){
@@ -719,7 +802,8 @@ const ICON = {
   book:'<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 11h18"/>',
   me:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/>',
   today:'<rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 10h18M8 15h3"/>',
-  members:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5.4 6-5.4s6 2.4 6 5.4"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.2-.8-3.9-2-5"/>'
+  members:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5.4 6-5.4s6 2.4 6 5.4"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.2-.8-3.9-2-5"/>',
+  stats:'<path d="M3.5 20.5h17"/><path d="M6.5 20.5v-6"/><path d="M12 20.5V5"/><path d="M17.5 20.5v-9"/>'
 };
 function svg(k){
   return '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
@@ -727,10 +811,14 @@ function svg(k){
 }
 function buildNav(){
   const tabs = isAdmin()
-    ? [['today','현황'],['members','회원'],['book','예약'],['me','내 정보']]
-    : [['home','홈'],['book','예약'],['me','내 정보']];
-  document.getElementById('nav').innerHTML = tabs.map(([k,label])=>
-    '<button data-go="'+k+'">'+svg(k)+'<span>'+label+'</span></button>').join('');
+    ? [['today','현황'],['members','회원'],['book','예약'],['stats','통계'],['me','내 정보']]
+    : [['home','홈'],['book','예약'],['stats','통계'],['me','내 정보']];
+  // 넓은 화면에서는 메뉴가 왼쪽 기둥이 되므로 그 머리에 로고가 붙는다
+  document.getElementById('nav').innerHTML =
+    '<div class="navbrand"><img src="logo.png" alt="">'+
+      '<div class="wordmark">Rhythm House</div></div>'+
+    tabs.map(([k,label])=>
+      '<button data-go="'+k+'">'+svg(k)+'<span>'+label+'</span></button>').join('');
   document.getElementById('nav').querySelectorAll('[data-go]').forEach(b=>{
     b.onclick = ()=> go(b.dataset.go);
   });
@@ -738,7 +826,8 @@ function buildNav(){
 function go(p){
   page = p;
   const map = { home:'pgHome', book:'pgBook', me:'pgMe',
-                today:'pgToday', members:'pgMembers', member:'pgMember' };
+                today:'pgToday', members:'pgMembers', member:'pgMember',
+                stats:'pgStats' };
   Object.entries(map).forEach(([k,id])=>
     document.getElementById(id).classList.toggle('hide', k!==p));
   const navKey = (p==='member') ? 'members' : p;   // 상세 화면에서도 '회원' 탭이 켜져 있다
@@ -748,6 +837,7 @@ function go(p){
 
   if(p==='book' || p==='today') subscribeDay();
   if(p==='members') subscribeMembers();
+  if(p==='stats'){ subscribeMembers(); loadStats(); }
   render();
 }
 function render(){
@@ -758,6 +848,7 @@ function render(){
   if(page==='today')   renderToday();
   if(page==='members') renderMembers();
   if(page==='member')  renderMemberDetail();
+  if(page==='stats')   renderStats();
 }
 
 /* ===================== 실시간 구독 ===================== */
@@ -1140,7 +1231,12 @@ function renderBook(){
  * "내가 언제 연습했고 다음 레슨이 언제인지"가 한눈에 들어온다.
  */
 function bookDayHTML(){
-  return calendarHTML() + dayRoomsHTML();
+  // 넓은 화면(1100px 이상)에서는 달력이 왼쪽, 그 날의 연습실이 오른쪽에 나란히 선다.
+  // 좁은 화면에서는 .cols가 그냥 위아래로 쌓인다.
+  return '<div class="cols">'+
+    '<div>'+ calendarHTML() +'</div>'+
+    '<div>'+ dayRoomsHTML() +'</div>'+
+  '</div>';
 }
 
 function calendarHTML(){
@@ -1265,7 +1361,9 @@ function renderMe(){
   const past = myBookings.filter(b=> slotTime(b.date,b.hour) < new Date()).reverse().slice(0,10);
   document.getElementById('pgMe').innerHTML =
     '<div class="h1" style="font-size:19px">내 정보</div>'+
-    '<div class="card" style="margin-top:14px">'+
+    '<div class="cols even" style="margin-top:14px">'+
+    '<div>'+
+    '<div class="card">'+
       kv('이름', ME.name||'—')+ kv('연락처', ME.phone||'—')+ kv('이메일', ME.email||'—')+
       kv('레슨', nextLessonText())+
       kv('연습권', liveCredits(ME)+'시간 남음 · 주 '+weeklyOf(ME)+'시간')+
@@ -1281,7 +1379,8 @@ function renderMe(){
               '<div class="sub muted">'+(x.grantedHours?'연습권 '+x.grantedHours+'시간':'')+'</div>'+
             '</div></div>').join('')
       : '<div class="empty">아직 레슨 기록이 없어요</div>')+
-    '<div class="sec">지난 연습</div>'+
+    '</div><div>'+
+    '<div class="sec" style="margin-top:0">지난 연습</div>'+
     (past.length ? past.map(b=>{
       const r=roomOf(b.roomId);
       return '<div class="card flat" style="padding:12px 14px;margin-bottom:8px">'+
@@ -1289,6 +1388,7 @@ function renderMe(){
         '<div style="flex:1;font-size:14px">'+fmtDate(b.date)+' '+pad(b.hour)+':00</div>'+
         '<div class="sub" style="color:'+r.color+'">'+r.name+'</div></div></div>';
     }).join('') : '<div class="empty">아직 기록이 없어요</div>')+
+    '</div></div>'+
     '<div class="foot" style="padding-top:26px">'+
       '리듬 하우스 · 경기 용인시 기흥구 농서동 455, 3층 345호'+
       '<div class="keys">ACOUSTIC · TRAINING · REPEAT</div>'+
@@ -1312,7 +1412,12 @@ function renderToday(){
     return;
   }
 
-  const HOUR_PX = 40, H = 24*HOUR_PX;
+  // 넓고 높은 화면에서는 24시간이 스크롤 없이 한 화면에 들어오도록 칸을 줄인다
+  const wide = window.innerWidth >= 1100;
+  const HOUR_PX = wide
+    ? Math.max(32, Math.min(44, Math.floor((window.innerHeight - 330) / 24)))
+    : 40;
+  const H = 24*HOUR_PX;
   const now = new Date();
   const isToday = selDate === ymd(now);
   const nowTop = (now.getHours()+now.getMinutes()/60) * HOUR_PX;
@@ -1337,8 +1442,15 @@ function renderToday(){
       }
       return '<div class="ev" data-act="admCancel" data-id="'+b.id+'" style="top:'+(b.hour*HOUR_PX+3)+
         'px;height:'+(HOUR_PX-6)+'px;background:'+bg+';border:'+bd+';color:'+ink+'">'+
-        '<div style="font-size:12px;line-height:1.3">'+esc(label)+'</div>'+
-        '<div style="font-size:10px;opacity:.8">'+pad(b.hour)+':00</div></div>';
+        (wide
+          ? '<div class="row" style="gap:8px;align-items:baseline">'+
+              '<div style="font-size:12.5px;line-height:1.25;white-space:nowrap;'+
+                'overflow:hidden;text-overflow:ellipsis">'+esc(label)+'</div>'+
+              '<div class="spacer"></div>'+
+              '<div style="font-size:10px;opacity:.8">'+pad(b.hour)+':00</div></div>'
+          : '<div style="font-size:12px;line-height:1.3">'+esc(label)+'</div>'+
+            '<div style="font-size:10px;opacity:.8">'+pad(b.hour)+':00</div>')+
+        '</div>';
     }).join('');
     const empties = [];
     for(let h=0; h<24; h++){
@@ -1384,6 +1496,231 @@ function stat(n,label,color){
   return '<div class="card" style="flex:1;padding:13px 0;text-align:center">'+
     '<div class="num" style="font-size:23px;line-height:1'+(color?';color:'+color:'')+'">'+n+'</div>'+
     '<div class="sub" style="margin-top:6px">'+label+'</div></div>';
+}
+
+/* ===================== 통계 =====================
+   예약 1칸 = 1시간이다. 지나간 '연습' 예약만 센다.
+   관리자는 기간 안의 예약 전체를 한 번 가져와 회원별로 나누고,
+   회원은 이미 받아둔 본인 예약만 쓰므로 따로 조회하지 않는다. */
+
+function statFrom(){ return ymd(addDays(new Date(), -(statDays-1))); }
+function statRangeLabel(){
+  return statDays===28 ? '최근 4주' : (statDays===84 ? '최근 12주' : '최근 1년');
+}
+
+async function loadStats(){
+  if(!isAdmin()){ statState = 'done'; return; }
+  const from = statFrom(), to = ymd(new Date());
+  if(statKey === from && statState === 'done') return;
+  statState = 'load';
+  if(page==='stats') renderStats();
+  try{
+    const snap = await getDocs(query(collection(db,'bookings'),
+      where('date','>=',from), where('date','<=',to)));
+    statRows  = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    statKey   = from;
+    statState = 'done';
+  }catch(e){
+    statState = 'fail';
+  }
+  if(page==='stats') renderStats();
+}
+
+/** 기간 안의, 이미 지나간 예약 */
+function statSource(kind){
+  const now  = new Date();
+  const from = statFrom();
+  const src  = isAdmin() ? statRows : myBookings;
+  return src.filter(b=> b.kind===kind && b.date>=from && slotTime(b.date,b.hour) < now);
+}
+/** 지금 보고 있는 대상(전체 / 한 사람)으로 좁힌다 */
+function statOnly(list){
+  const who = isAdmin() ? statWho : myMid();
+  return who ? list.filter(b=> b.memberId === who) : list;
+}
+
+function summarize(list){
+  const today = ymd(new Date());
+  const days  = new Set(list.map(b=>b.date));
+  let start = statFrom();
+  if(list.length){
+    const first = list.map(b=>b.date).sort()[0];
+    if(first > start) start = first;        // 들어온 지 얼마 안 된 회원을 불리하게 세지 않는다
+  }
+  const span = Math.max(1,
+    Math.round((parseYmd(today) - parseYmd(start)) / 86400000) + 1);
+  return {
+    hours : list.length,
+    active: days.size,
+    span  : span,
+    weekly: list.length / (Math.max(7, span) / 7),
+    perAct: days.size ? list.length / days.size : 0,
+    perDay: list.length / span,
+    paid  : list.filter(usesCredit).length,
+    free  : list.filter(b=> !usesCredit(b)).length
+  };
+}
+function n1(x){ return (Math.round(x*10)/10).toFixed(1); }
+
+/** 막대 그래프 — 그림 라이브러리 없이 칸의 높이만으로 그린다 */
+function barsHTML(vals, labels, o){
+  o = o || {};
+  const max  = Math.max(1, ...vals);
+  const nums = vals.length <= 14;
+  const bw = vals.length<=4 ? 84 : (vals.length<=7 ? 62 : (vals.length<=13 ? 42 : 999));
+  return '<div class="chart"><div class="bars" style="--bw:'+bw+'px">'+
+    vals.map((v,i)=>{
+      let cls = v===0 ? 'z' : (o.gold ? 'gold' : '');
+      if(v===max && v>0) cls = 'hot';
+      const mark  = (o.mark===i) ? ' now' : '';
+      const showL = !o.every || (i % o.every === 0) || i===vals.length-1;
+      const hpc   = v ? Math.max(5, Math.round(v/max*100)) : 2;
+      return '<div class="cbar'+mark+'">'+
+        (nums ? '<b class="'+(v?'':'off')+'">'+v+'</b>' : '')+
+        '<i class="'+cls+'" style="height:'+hpc+'%"></i>'+
+        '<span class="'+(showL?'':'off')+'">'+labels[i]+'</span></div>';
+    }).join('')+
+  '</div></div>';
+}
+
+function weekChartHTML(list){
+  const n  = statDays<=28 ? 4 : (statDays<=84 ? 12 : 26);
+  const w0 = startOfWeek(ymd(new Date()));
+  const weeks = [];
+  for(let i=n-1; i>=0; i--) weeks.push(ymd(addDays(parseYmd(w0), -7*i)));
+  const vals = weeks.map(ws=>{
+    const we = ymd(addDays(parseYmd(ws), 6));
+    return list.filter(b=> b.date>=ws && b.date<=we).length;
+  });
+  const labels = weeks.map(ws=>{ const d=parseYmd(ws); return (d.getMonth()+1)+'/'+d.getDate(); });
+  return barsHTML(vals, labels, { every: n>13 ? 4 : 1, mark: n-1 });
+}
+function dowChartHTML(list){
+  const v = [0,0,0,0,0,0,0];
+  list.forEach(b=> v[parseYmd(b.date).getDay()]++);
+  return barsHTML(v, ['일','월','화','수','목','금','토'], { mark: new Date().getDay() });
+}
+function hourChartHTML(list){
+  const v = new Array(24).fill(0);
+  list.forEach(b=> v[b.hour]++);
+  return barsHTML(v, v.map((_,i)=>pad(i)), { every:3, mark:new Date().getHours() });
+}
+
+function statBox(n, unit, label, color){
+  return '<div class="statbox"><div class="n"'+(color?' style="color:'+color+'"':'')+'>'+
+    n + (unit ? '<small>'+unit+'</small>' : '') + '</div>'+
+    '<div class="l">'+label+'</div></div>';
+}
+
+/** (관리자) 회원별 줄 — 많이 연습한 순서 */
+function memberStatHTML(every){
+  const rows = members.map(m=>{
+    const mid = m.mid || m.key;
+    return { m, mid, s: summarize(every.filter(b=> b.memberId===mid)) };
+  }).sort((a,b)=> b.s.hours - a.s.hours ||
+       (a.m.name||'').localeCompare(b.m.name||'','ko'));
+  const max = Math.max(1, ...rows.map(r=>r.s.hours));
+  if(!rows.length) return '<div class="empty">회원이 없어요</div>';
+  return rows.map((r,i)=>
+    '<button class="mrow'+(statWho===r.mid?' on':'')+'" data-act="statWho" data-w="'+r.mid+'">'+
+      '<div class="row">'+
+        '<div class="num" style="font-size:15.5px">'+esc(r.m.name||'이름 없음')+'</div>'+
+        (r.m.role==='admin'
+          ? '<span class="chip" style="height:19px;font-size:10px;padding:0 8px">강사</span>' : '')+
+        '<div class="spacer"></div>'+
+        '<div class="num gold" style="font-size:17px">'+r.s.hours+
+          '<span class="sub" style="margin-left:3px">시간</span></div>'+
+      '</div>'+
+      '<div class="row sub muted" style="gap:7px;margin-top:5px;font-size:11px">'+
+        '<span>주 평균 '+n1(r.s.weekly)+'시간</span><span>·</span>'+
+        '<span>'+r.s.active+'일 나옴</span><span>·</span>'+
+        '<span>나온 날 '+n1(r.s.perAct)+'시간</span></div>'+
+      '<div class="track"><i class="'+(i===0 && r.s.hours ? 'top':'')+
+        '" style="width:'+Math.round(r.s.hours/max*100)+'%"></i></div>'+
+    '</button>').join('');
+}
+
+function renderStats(){
+  const admin = isAdmin();
+  const every = statSource('practice');          // 기간 안의 모두
+  const list  = statOnly(every);                 // 지금 보는 대상
+  const les   = statOnly(statSource('lesson'));
+  const s     = summarize(list);
+  const who   = (admin && statWho)
+    ? members.find(m=> (m.mid||m.key) === statWho) : null;
+
+  const head =
+    '<div class="row"><div class="h1" style="font-size:19px">연습 통계</div>'+
+      '<div class="spacer"></div>'+
+      (who ? '<button class="chip on" data-act="statWho" data-w="">'+
+               esc(who.name||'회원')+' 보는 중 ✕</button>' : '')+
+    '</div>'+
+    '<div class="modes" style="margin-top:12px">'+
+      [[28,'최근 4주'],[84,'최근 12주'],[365,'최근 1년']].map(([d,l])=>
+        '<button data-act="statRange" data-d="'+d+'" class="'+
+          (statDays===d?'on':'')+'">'+l+'</button>').join('')+
+    '</div>';
+
+  if(admin && statState==='load'){
+    document.getElementById('pgStats').innerHTML =
+      head + '<div class="empty" style="margin-top:16px">불러오는 중…</div>';
+    bind('pgStats'); return;
+  }
+  if(admin && statState==='fail'){
+    document.getElementById('pgStats').innerHTML =
+      head + '<div class="empty" style="margin-top:16px">통계를 불러오지 못했어요</div>';
+    bind('pgStats'); return;
+  }
+
+  const tiles =
+    '<div class="statgrid">'+
+      statBox(s.hours, '시간', statRangeLabel()+' 연습 총량')+
+      statBox(n1(s.weekly), '시간', '주 평균', '#E3CFA6')+
+      statBox(s.active, '일', '연습하러 나온 날')+
+      statBox(n1(s.perAct), '시간', '나온 날 하루 평균')+
+    '</div>'+
+    '<div class="card flat" style="margin-top:10px;padding:13px 15px">'+
+      '<div class="row sub" style="gap:7px;flex-wrap:wrap">'+
+        '<span>기간 전체로는 하루 평균 <b class="gold" style="font-weight:400">'+
+          n1(s.perDay)+'시간</b></span>'+
+        '<span class="muted">·</span>'+
+        '<span>연습권 차감 '+s.paid+'시간</span>'+
+        '<span class="muted">·</span>'+
+        '<span class="muted">미차감 '+s.free+'시간</span>'+
+        (les.length ? '<span class="muted">·</span><span>레슨 '+les.length+'회</span>' : '')+
+      '</div></div>';
+
+  const rooms = ROOMS.map(r=>{
+    const n = list.filter(b=> b.roomId===r.id).length;
+    const pc = s.hours ? Math.round(n/s.hours*100) : 0;
+    return '<div style="flex:1;min-width:0">'+
+      '<div class="row sub" style="gap:6px"><span style="color:'+r.color+'">'+r.name+'</span>'+
+        '<div class="spacer"></div><span class="num">'+n+'시간</span></div>'+
+      '<div class="bar" style="margin-top:7px"><i style="width:'+pc+'%;background:'+r.color+'"></i></div>'+
+    '</div>';
+  }).join('');
+
+  const charts =
+    '<div class="sec">주별 연습 시간</div>'+ weekChartHTML(list)+
+    '<div class="cols even" style="margin-top:4px">'+
+      '<div><div class="sec">요일별</div>'+ dowChartHTML(list)+'</div>'+
+      '<div><div class="sec">시간대별</div>'+ hourChartHTML(list)+'</div>'+
+    '</div>'+
+    '<div class="sec">연습실별</div>'+
+    '<div class="card flat"><div class="row" style="gap:18px;align-items:flex-start">'+rooms+'</div></div>';
+
+  const people = admin
+    ? '<div class="sec"><span>회원별'+(statWho?' (누르면 전체로)':'')+'</span>'+
+        '<span class="muted">'+statRangeLabel()+'</span></div>'+
+      memberStatHTML(every)
+    : '';
+
+  const foot = '<div class="sub muted" style="margin-top:18px;line-height:1.7">'+
+    '예약 한 칸이 1시간이에요. 이미 지나간 연습만 셉니다.<br>'+
+    '주 평균은 '+(list.length ? '처음 연습한 날부터 오늘까지' : '기간 전체')+'를 기준으로 계산했어요.</div>';
+
+  document.getElementById('pgStats').innerHTML = head + tiles + charts + people + foot;
+  bind('pgStats');
 }
 
 /* ===================== 관리자 · 회원 관리 ===================== */
@@ -1724,6 +2061,8 @@ async function handle(d){
     case 'moveBooking': moveBooking(d.id); break;
     case 'weekly':     setWeekly(d.key, Number(d.n)); break;
     case 'admCancelAny': admCancelAny(d.id); break;
+    case 'statRange': statDays = Number(d.d); statWho = statWho; loadStats(); renderStats(); break;
+    case 'statWho':   statWho = d.w || ''; renderStats(); break;
   }
 }
 
@@ -2528,6 +2867,18 @@ if('serviceWorker' in navigator){
 }
 
 /* 분이 바뀌면 홈의 종료 안내와 현황의 '지금' 선을 다시 그린다 */
+let resizeTimer = null, lastW = window.innerWidth, lastH = window.innerHeight;
+addEventListener('resize', ()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=>{
+    // 폰에서 주소창이 숨겨질 때처럼 아주 작은 변화로는 다시 그리지 않는다
+    if(Math.abs(window.innerWidth-lastW) < 40 && Math.abs(window.innerHeight-lastH) < 120) return;
+    lastW = window.innerWidth; lastH = window.innerHeight;
+    scrolledFor = null;
+    if(ME) render();
+  }, 220);
+});
+
 let lastMinute = -1;
 setInterval(()=>{
   const m = new Date().getMinutes();

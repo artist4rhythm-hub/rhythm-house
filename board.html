@@ -99,6 +99,24 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
 .ticks{display:flex;margin-left:7rem;margin-top:.25rem}
 .ticks span{flex:1;font-size:.72rem;color:var(--mute);text-align:left}
 
+/* 현재 시각 라인 */
+.tbody{position:relative}
+.wk{position:relative}
+.nowline{position:absolute;top:-.2rem;bottom:-.2rem;width:2px;margin-left:-1px;
+  background:var(--red);border-radius:1px;z-index:4;
+  box-shadow:0 0 .5rem rgba(200,70,58,.95),0 0 1.4rem rgba(200,70,58,.45)}
+.nowline::before{content:'';position:absolute;left:50%;top:-.3rem;width:.55rem;height:.55rem;
+  margin-left:-.275rem;border-radius:50%;background:var(--red);
+  box-shadow:0 0 .5rem rgba(200,70,58,.95)}
+.nowline.soft{opacity:.65;box-shadow:0 0 .4rem rgba(200,70,58,.7)}
+.nowline.soft::before{display:none}
+.nowtag{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+  margin-bottom:.45rem;font-family:var(--f-head);font-size:.8rem;color:#FFF6EC;
+  background:var(--red);border-radius:.35rem;padding:.1rem .45rem;white-space:nowrap;
+  line-height:1.5}
+.nowtag.rt{left:auto;right:0;transform:none}
+.nowtag.lt{left:0;transform:none}
+
 .sect.grow{flex:1;display:flex;flex-direction:column;min-height:0}
 .wk{flex:1;display:flex;flex-direction:column;gap:.3rem;min-height:0}
 .wrow{flex:1;min-height:1.1rem;display:flex;align-items:stretch;gap:.8rem}
@@ -215,7 +233,7 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
   <div class="ft">
     <div class="slogan">드러머는 연습으로 만들어집니다</div>
     <div class="sp"></div>
-    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v16</span></div>
+    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v17</span></div>
   </div>
 </div>
 
@@ -361,7 +379,19 @@ function paint(){
   document.getElementById('dCount').textContent = '남은 예약 '+rest.length+'건';
 
   /* 오늘 — 연습실마다 24칸 막대 */
+  const nowFr   = (h*60 + mins) / 1440;              // 0(자정) ~ 1(다음 자정)
+  const nowText = pad(h)+':'+pad(mins);
+  /** 24칸 막대 위에서 지금 이 순간의 가로 위치를 계산한다.
+   *  칸 사이에 간격이 있어서 그만큼을 더해줘야 눈금과 어긋나지 않는다. */
+  function nowLeft(gapPx){
+    const gaps = Math.min(23, Math.floor(nowFr*24));
+    return 'calc(7rem + (100% - 7rem - '+(23*gapPx)+'px) * '+nowFr.toFixed(5)+
+           ' + '+(gaps*gapPx)+'px)';
+  }
+  const tagPos = nowFr > .9 ? ' rt' : (nowFr < .07 ? ' lt' : '');
+
   document.getElementById('dToday').innerHTML =
+    '<div class="tbody">'+
     ROOMS.map(r=>{
       const segs = [];
       for(let i=0;i<24;i++){
@@ -379,6 +409,9 @@ function paint(){
       return '<div class="trow"><div class="tname" style="color:'+r.color+'">'+r.name+'</div>'+
         '<div class="tbar">'+segs.join('')+'</div></div>';
     }).join('')+
+    '<i class="nowline" style="left:'+nowLeft(2)+'">'+
+      '<b class="nowtag'+tagPos+'">'+nowText+'</b></i>'+
+    '</div>'+
     '<div class="ticks">'+
       [0,3,6,9,12,15,18,21].map(t=>'<span>'+pad(t)+'</span>').join('')+
     '</div>';
@@ -411,7 +444,8 @@ function paint(){
       '<div class="wday">'+dow(d)+' '+d.getDate()+'</div>'+
       '<div class="wbars">'+bars+'</div></div>');
   }
-  document.getElementById('dWeek').innerHTML = rows.join('');
+  document.getElementById('dWeek').innerHTML = rows.join('')+
+    '<i class="nowline soft" style="left:'+nowLeft(1)+'"></i>';
 }
 
 /* ── 시계 / 자정 넘김 ── */
