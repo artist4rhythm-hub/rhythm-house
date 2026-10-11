@@ -505,7 +505,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v17 · 2026-10-11';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v18 · 2026-10-11';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -535,6 +535,11 @@ let statWho   = '';         // (관리자) 한 사람만 들여다볼 때의 식
 let statRows  = [];         // (관리자) 그 기간의 예약 전체
 let statState = 'idle';     // idle | load | done | fail
 let statKey   = '';         // 지금 담겨 있는 자료의 시작일 (같으면 다시 안 부른다)
+let parkingUrl = '';        // 주차 중계 서버 주소 (config/app 에 관리자가 넣는다)
+let parkMine   = [];        // 오늘 내 주차 등록 기록
+let parkDay    = [];        // (관리자) 현황에서 보는 날의 주차 등록 기록
+let parkBusy   = false;     // 등록 요청이 날아가는 중
+let unsubConfig = null, unsubParkMine = null, unsubParkDay = null;
 
 /* ===================== 유틸 ===================== */
 function ymd(d){
@@ -737,7 +742,8 @@ function show(which){
 onAuthStateChanged(auth, async (user)=>{
   [unsubDay, unsubWeek, unsubMine, unsubMe, unsubMembers,
    unsubMyLessons, unsubMbLessons, unsubMbBookings, unsubAllLessons,
-   unsubMon].forEach(u=>{ if(u) u(); });
+   unsubMon, unsubConfig, unsubParkMine, unsubParkDay].forEach(u=>{ if(u) u(); });
+  unsubConfig = unsubParkMine = unsubParkDay = null;
   unsubDay = unsubWeek = unsubMine = unsubMe = unsubMembers = null;
   unsubMyLessons = unsubMbLessons = unsubMbBookings = unsubAllLessons = unsubMon = null;
 
@@ -786,6 +792,15 @@ onAuthStateChanged(auth, async (user)=>{
     s=>{ myLessons = s.docs.map(d=>({ id:d.id, ...d.data() })).sort(byLessonDate); render(); },
     ()=>{}
   );
+  // 앱 설정 — 주차 중계 서버 주소
+  unsubConfig = onSnapshot(doc(db,'config','app'),
+    s=>{ parkingUrl = (s.exists() && s.data().parkingUrl) || ''; render(); },
+    ()=>{});
+  // 오늘 내 주차 등록 기록
+  unsubParkMine = onSnapshot(
+    query(collection(db,'parkingLogs'), where('memberKey','==', key), where('day','==', ymd(new Date()))),
+    s=>{ parkMine = s.docs.map(d=>({ id:d.id, ...d.data() })); render(); },
+    ()=>{});
   // 내 예약 실시간 구독 — 예약에는 이메일이 아니라 내부 식별자(mid)만 쓴다
   unsubMine = onSnapshot(
     query(collection(db,'bookings'), where('memberId','==', ME.mid || key)),
@@ -852,7 +867,17 @@ function render(){
 }
 
 /* ===================== 실시간 구독 ===================== */
+function subscribeParkDay(){
+  if(unsubParkDay){ unsubParkDay(); unsubParkDay = null; }
+  if(!isAdmin()) return;
+  unsubParkDay = onSnapshot(
+    query(collection(db,'parkingLogs'), where('day','==', selDate)),
+    s=>{ parkDay = s.docs.map(d=>({ id:d.id, ...d.data() }));
+         if(page==='today') renderToday(); },
+    ()=>{});
+}
 function subscribeDay(){
+  subscribeParkDay();
   if(unsubDay) unsubDay();
   unsubDay = onSnapshot(
     query(collection(db,'bookings'), where('date','==',selDate)),
@@ -1022,6 +1047,7 @@ function renderHome(){
     '</div>'+
 
     endingSoonNotice()+
+    parkingCard()+
 
     (creditExpired(ME)
       ? '<div class="card flat" style="margin-top:12px;border-color:#5A2A26">'+
@@ -1389,10 +1415,12 @@ function renderMe(){
         '<div class="sub" style="color:'+r.color+'">'+r.name+'</div></div></div>';
     }).join('') : '<div class="empty">아직 기록이 없어요</div>')+
     '</div></div>'+
+    (isAdmin() ? parkingAdminCard() : '')+
     '<div class="foot" style="padding-top:26px">'+
       '리듬 하우스 · 경기 용인시 기흥구 농서동 455, 3층 345호'+
       '<div class="keys">ACOUSTIC · TRAINING · REPEAT</div>'+
       '<div class="verline">'+APP_VERSION+'</div></div>';
+  bind('pgMe');
 }
 function kv(k,v,last){
   return '<div class="row" style="padding:11px 0'+(last?'':';border-bottom:1px solid var(--line-soft)')+'">'+
@@ -1483,7 +1511,8 @@ function renderToday(){
       (isToday?'<span class="rose">지금 '+pad(now.getHours())+':'+pad(now.getMinutes())+'</span>':'<span></span>')+'</div>'+
     '<div class="tl"><div class="axis" style="position:relative;height:'+H+'px;margin-top:30px">'+
       labels.join('')+'</div>'+tracks+'</div>'+
-    '<div class="sub muted" style="margin-top:12px">빈 칸을 누르면 예약을 추가하거나 시간을 차단할 수 있어요.</div>';
+    '<div class="sub muted" style="margin-top:12px">빈 칸을 누르면 예약을 추가하거나 시간을 차단할 수 있어요.</div>'+
+    parkDayHTML();
 
   bind('pgToday');
   // 현재 시각 근처로 한 번만 스크롤 (실시간 갱신마다 튀지 않도록)
@@ -1496,6 +1525,186 @@ function stat(n,label,color){
   return '<div class="card" style="flex:1;padding:13px 0;text-align:center">'+
     '<div class="num" style="font-size:23px;line-height:1'+(color?';color:'+color:'')+'">'+n+'</div>'+
     '<div class="sub" style="margin-top:6px">'+label+'</div></div>';
+}
+
+/* ===================== 주차 2시간 무료 등록 =====================
+   앱은 차량번호만 중계 서버로 보낸다. 주차 사이트 아이디·비밀번호는
+   중계 서버 안에만 있고, 이 파일 어디에도 없다.
+   하루 횟수, 오늘 예약 여부, 번호판 일치 확인은 모두 서버가 한다. */
+
+const PLATE_RE = /^([가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
+function cleanPlate(v){ return String(v||'').replace(/[\s\-·.]/g,''); }
+function savedPlate(){ try{ return localStorage.getItem('rh-plate') || ''; }catch(_){ return ''; } }
+function rememberPlate(v){ try{ localStorage.setItem('rh-plate', v); }catch(_){} }
+function parkLimit(m){ return (m && Number.isFinite(m.parkingDaily)) ? m.parkingDaily : 1; }
+function hhmm(ts){
+  const d = ts && ts.toDate ? ts.toDate() : null;
+  return d ? pad(d.getHours())+':'+pad(d.getMinutes()) : '';
+}
+
+async function callParking(body){
+  if(!parkingUrl) return { ok:false, message:'주차 연동 주소가 아직 설정되지 않았어요.' };
+  let res;
+  try{
+    const token = await auth.currentUser.getIdToken();
+    res = await fetch(parkingUrl, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify(body)
+    });
+  }catch(e){
+    return { ok:false, message:'주차 서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.' };
+  }
+  let j = null;
+  try{ j = await res.json(); }catch(_){}
+  if(!j || typeof j.ok !== 'boolean')
+    j = { ok:false, message:'주차 서버가 응답하지 않아요 ('+res.status+'). 관리자에게 알려 주세요.' };
+  return j;
+}
+
+/** 홈 화면 카드 */
+function parkingCard(){
+  if(!parkingUrl) return '';
+  const limit = parkLimit(ME);
+  if(limit <= 0 && !isAdmin()) return '';
+  const done = parkMine.filter(l=> l.ok && !l.already)
+                       .sort((a,b)=> (b.at&&b.at.seconds||0) - (a.at&&a.at.seconds||0));
+  const today = ymd(new Date());
+  const hasBooking = isAdmin() || myBookings.some(b=> b.date === today);
+  const left = Math.max(0, limit - done.length);
+
+  const doneRows = done.map(l=>
+    '<div class="row" style="gap:8px;margin-top:9px">'+
+      '<span class="chip paid" style="height:22px;font-size:11px">등록 완료</span>'+
+      '<span class="num" style="font-size:15px">'+esc(l.plate)+'</span>'+
+      '<div class="spacer"></div>'+
+      '<span class="sub muted">'+(l.entryAt ? esc(l.entryAt.slice(11,16))+' 입차' : hhmm(l.at))+'</span>'+
+    '</div>').join('');
+
+  let action;
+  if(!hasBooking)
+    action = '<div class="sub muted" style="margin-top:10px">오늘 연습·레슨 예약이 있는 날에만 등록할 수 있어요.</div>';
+  else if(left <= 0)
+    action = '<div class="sub muted" style="margin-top:10px">오늘 등록할 수 있는 횟수를 다 썼어요.</div>';
+  else
+    action = '<button class="btn primary" style="width:100%;height:48px;margin-top:12px" data-act="parkForm">'+
+               (done.length ? '다른 차 등록하기' : '주차 2시간 무료 등록')+'</button>';
+
+  return '<div class="card" style="margin-top:12px">'+
+    '<div class="row"><div class="sub">🚗 주차</div><div class="spacer"></div>'+
+      '<div class="sub muted">하루 '+limit+'회 · 2시간 무료</div></div>'+
+    doneRows + action +
+  '</div>';
+}
+
+/** 차량번호 입력 창 */
+function parkForm(){
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal">'+
+      '<h3>주차 2시간 무료 등록</h3>'+
+      '<p>주차장에 <b>들어온 뒤에</b> 등록해 주세요.<br>번호판을 <b>전부</b> 입력해야 해요.</p>'+
+      '<div style="margin-top:14px"><label for="pkPlate">차량번호</label>'+
+        '<input id="pkPlate" value="'+esc(savedPlate())+'" placeholder="12가3456" '+
+        'autocomplete="off" autocapitalize="off" spellcheck="false" '+
+        'style="font-size:20px;letter-spacing:1px;text-align:center"></div>'+
+      '<div class="sub muted" id="pkMsg" style="margin-top:9px;min-height:18px"></div>'+
+      '<div class="acts">'+
+        '<button class="btn" id="pkCancel">취소</button>'+
+        '<button class="btn primary" id="pkGo">등록</button>'+
+      '</div>'+
+    '</div></div>';
+  const inp = host.querySelector('#pkPlate'), msg = host.querySelector('#pkMsg');
+  const go  = host.querySelector('#pkGo');
+  host.querySelector('#pkCancel').onclick = closeModal;
+  setTimeout(()=> inp.focus(), 50);
+  inp.onkeydown = e=>{ if(e.key==='Enter') go.click(); };
+  go.onclick = async ()=>{
+    if(parkBusy) return;
+    const plate = cleanPlate(inp.value);
+    if(!PLATE_RE.test(plate)){ msg.textContent = '12가3456 처럼 번호판 전체를 입력해 주세요.'; msg.className='sub rose'; return; }
+    parkBusy = true; go.disabled = true; go.textContent = '등록 중…';
+    msg.className='sub muted'; msg.textContent = '주차 사이트에 등록하고 있어요. 10초쯤 걸려요.';
+    const r = await callParking({ plate });
+    parkBusy = false;
+    if(r.ok){
+      rememberPlate(plate);
+      closeModal();
+      info({ title: r.already ? '이미 등록돼 있어요' : '등록했어요',
+             body: '<b>'+esc(plate)+'</b><br>'+esc(r.message||'')+
+                   (r.entryAt ? '<br><span class="sub">'+esc(r.entryAt.slice(11,16))+' 입차</span>' : '') });
+    }else{
+      go.disabled = false; go.textContent = '다시 등록';
+      msg.className='sub rose'; msg.textContent = r.message || '등록하지 못했어요.';
+    }
+  };
+}
+
+/** (관리자) 내 정보 — 주차 연동 설정 */
+function parkingAdminCard(){
+  const short = parkingUrl ? parkingUrl.replace(/^https?:\/\//,'').slice(0,46)+(parkingUrl.length>54?'…':'') : '';
+  return '<div class="sec">주차 연동</div>'+
+    '<div class="card">'+
+      '<div class="row" style="gap:8px">'+
+        '<span class="chip '+(parkingUrl?'paid':'unpaid')+'" style="height:22px;font-size:11px">'+
+          (parkingUrl?'연결 주소 있음':'아직 설정 안 됨')+'</span>'+
+        '<div class="sub muted" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+          esc(short)+'</div>'+
+      '</div>'+
+      '<div class="row" style="gap:8px;margin-top:12px">'+
+        '<button class="btn sm" style="flex:1" data-act="parkSetup">주소 설정</button>'+
+        '<button class="btn sm" style="flex:1" data-act="parkPing"'+(parkingUrl?'':' disabled')+'>연결 확인</button>'+
+        '<button class="btn sm primary" style="flex:1" data-act="parkForm"'+(parkingUrl?'':' disabled')+'>직접 등록</button>'+
+      '</div>'+
+      '<div class="sub muted" style="margin-top:10px;line-height:1.6">'+
+        '주소를 넣으면 회원 홈 화면에 주차 등록 버튼이 나타나요. 비우면 사라져요.</div>'+
+    '</div>';
+}
+function parkSetup(){
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal">'+
+      '<h3>주차 중계 서버 주소</h3>'+
+      '<p>구글 클라우드에 올린 주차 서버의 주소(URL)를 붙여넣으세요.<br>비우고 저장하면 주차 기능이 꺼집니다.</p>'+
+      '<div style="margin-top:14px"><input id="psUrl" value="'+esc(parkingUrl)+'" '+
+        'placeholder="https://parking-....run.app" autocapitalize="off" spellcheck="false"></div>'+
+      '<div class="acts"><button class="btn" id="psCancel">취소</button>'+
+        '<button class="btn primary" id="psSave">저장</button></div>'+
+    '</div></div>';
+  host.querySelector('#psCancel').onclick = closeModal;
+  host.querySelector('#psSave').onclick = async ()=>{
+    const v = host.querySelector('#psUrl').value.trim();
+    if(v && !/^https:\/\/[^\s]+$/.test(v)){ toast('https:// 로 시작하는 주소를 넣어 주세요'); return; }
+    try{
+      await setDoc(doc(db,'config','app'), { parkingUrl: v }, { merge:true });
+      closeModal(); toast(v ? '저장했어요. 연결 확인을 눌러 보세요' : '주차 기능을 껐어요');
+    }catch(e){ toast('저장하지 못했어요 — 보안 규칙을 새로 붙여넣었는지 확인해 주세요'); }
+  };
+}
+async function parkPing(){
+  toast('주차 사이트에 로그인해 보는 중…');
+  const r = await callParking({ ping:true });
+  info({ title: r.ok ? '연결됐어요' : '연결 실패', body: esc(r.message || '') });
+}
+
+/** (관리자) 현황 — 그날의 주차 등록 기록 */
+function parkDayHTML(){
+  if(!isAdmin() || (!parkingUrl && !parkDay.length)) return '';
+  const list = parkDay.slice().sort((a,b)=> (b.at&&b.at.seconds||0) - (a.at&&a.at.seconds||0));
+  const okN = list.filter(l=> l.ok && !l.already).length;
+  return '<div class="sec"><span>주차 등록</span><span>성공 '+okN+'건 · 시도 '+list.length+'건</span></div>'+
+    (list.length ? list.map(l=>
+      '<div class="card flat" style="padding:11px 14px;margin-bottom:7px">'+
+        '<div class="row" style="gap:8px">'+
+          '<span class="chip '+(l.ok?'paid':'unpaid')+'" style="height:21px;font-size:10.5px">'+
+            (l.ok ? (l.already?'이미 등록':'등록') : '실패')+'</span>'+
+          '<span style="font-size:14px">'+esc(l.name||'')+'</span>'+
+          '<span class="num" style="font-size:14px">'+esc(l.plate||'—')+'</span>'+
+          '<div class="spacer"></div><span class="sub muted">'+hhmm(l.at)+'</span>'+
+        '</div>'+
+        (l.ok ? '' : '<div class="sub muted" style="margin-top:6px;font-size:11.5px">'+esc(l.message||'')+'</div>')+
+      '</div>').join('')
+    : '<div class="empty">이 날은 주차 등록이 없어요</div>');
 }
 
 /* ===================== 통계 =====================
@@ -2063,6 +2272,9 @@ async function handle(d){
     case 'admCancelAny': admCancelAny(d.id); break;
     case 'statRange': statDays = Number(d.d); statWho = statWho; loadStats(); renderStats(); break;
     case 'statWho':   statWho = d.w || ''; renderStats(); break;
+    case 'parkForm':  parkForm(); break;
+    case 'parkSetup': parkSetup(); break;
+    case 'parkPing':  parkPing(); break;
   }
 }
 
@@ -2770,6 +2982,12 @@ function formMember(m){
           '<div style="flex:1"><label for="fmGPhone">학부모 연락처</label>'+
             '<input id="fmGPhone" value="'+esc(m?(m.guardianPhone||''):'')+'" placeholder="선택"></div>'+
         '</div>'+
+        '<div><label for="fmPark">주차 2시간 무료 — 하루 등록 횟수</label>'+
+          '<select id="fmPark">'+
+            [[0,'쓰지 않음'],[1,'1회 (기본)'],[2,'2회'],[3,'3회']].map(([n,l])=>
+              '<option value="'+n+'"'+(((m && Number.isFinite(m.parkingDaily)) ? m.parkingDaily : 1)===n?' selected':'')+
+              '>'+l+'</option>').join('')+
+          '</select></div>'+
         '<div><label for="fmMemo">메모</label>'+
           '<textarea id="fmMemo" rows="3" placeholder="진도, 성향, 주의할 점 등">'+
           esc(m?(m.memo||''):'')+'</textarea></div>'+
@@ -2808,7 +3026,8 @@ function formMember(m){
       kakao:         host.querySelector('#fmKakao').value.trim(),
       guardianName:  host.querySelector('#fmGName').value.trim(),
       guardianPhone: host.querySelector('#fmGPhone').value.trim(),
-      memo:          host.querySelector('#fmMemo').value.trim()
+      memo:          host.querySelector('#fmMemo').value.trim(),
+      parkingDaily:  Number(host.querySelector('#fmPark').value)
     };
     if(isNew){
       const email = host.querySelector('#fmEmail').value.trim().toLowerCase();
