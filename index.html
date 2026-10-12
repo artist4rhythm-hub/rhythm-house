@@ -344,6 +344,32 @@ textarea:focus{outline:none;border-color:var(--black-room)}
 .mrow .track i{display:block;height:100%;border-radius:3px;background:var(--black-room)}
 .mrow .track i.top{background:var(--red)}
 
+.xdel{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);color:var(--mute);
+  font-size:12px;display:inline-flex;align-items:center;justify-content:center;margin-left:4px;flex:none}
+.xdel:hover{color:var(--red-l);border-color:#5A2A26}
+.act{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;margin-bottom:7px;
+  background:var(--deep);border:1px solid var(--line-soft);border-radius:14px}
+.act .t{font-family:var(--f-head);font-size:13px;color:var(--dim);width:44px;flex:none;padding-top:2px}
+.act .b{flex:1;min-width:0}
+.act .b .l1{font-size:14px;line-height:1.45}
+.act .b .l2{font-size:11.5px;color:var(--mute);margin-top:3px;line-height:1.5}
+.atag{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:10px;
+  font-size:10.5px;margin-right:6px;border:1px solid var(--line);color:var(--dim);vertical-align:1px}
+.atag.book{background:#1C2E44;border-color:#34557A;color:#A9C6E8}
+.atag.cancel{background:#3A1A16;border-color:#6B2E26;color:#F2BDB3}
+.atag.login{background:#1F2A20;border-color:#36553B;color:#A6D3AE}
+.atag.park{background:#2B2518;border-color:#8A7442;color:#E3CFA6}
+.atag.lesson{background:#2B2518;border-color:#8A7442;color:#E3CFA6}
+.online{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;
+  background:var(--surf);border:1px solid var(--line);margin:0 7px 7px 0;font-size:13px}
+.online i{width:8px;height:8px;border-radius:50%;background:#5BD07A;box-shadow:0 0 8px #5BD07A;flex:none}
+.online.idle i{background:#6B7F94;box-shadow:none}
+.online small{color:var(--mute);font-size:11px}
+.inapp{margin-top:26px;border-radius:16px;padding:16px;background:#3A2A12;border:1px solid #8A6A2E;
+  color:#F2DDB3;font-size:13.5px;line-height:1.7}
+.inapp b{font-family:var(--f-head);color:#FFE9BF}
+.inapp .btn{margin-top:12px;width:100%;height:46px}
+
 /* ---------- 타임라인 ---------- */
 .tl{display:flex;gap:8px}
 .tl .axis{width:40px;flex-shrink:0}
@@ -393,6 +419,7 @@ a{color:var(--red-l)}
       <div class="lg">Rhythm House</div>
       <div class="tag">연습실 예약</div>
     </div>
+    <div id="inAppBox"></div>
     <div class="col" style="margin-top:38px">
       <button class="cta google" id="btnGoogle">
         <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
@@ -461,6 +488,7 @@ a{color:var(--red-l)}
     <section id="pgMembers" class="hide"></section>
     <section id="pgMember" class="hide"></section>
     <section id="pgStats" class="hide"></section>
+    <section id="pgMonitor" class="hide"></section>
   </div>
 
   <nav class="nav" id="nav"></nav>
@@ -505,7 +533,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v18 · 2026-10-11';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v19 · 2026-10-12';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -540,6 +568,13 @@ let parkMine   = [];        // 오늘 내 주차 등록 기록
 let parkDay    = [];        // (관리자) 현황에서 보는 날의 주차 등록 기록
 let parkBusy   = false;     // 등록 요청이 날아가는 중
 let unsubConfig = null, unsubParkMine = null, unsubParkDay = null;
+let monDay     = '';        // (관리자) 기록 화면이 보는 날
+let monFilter  = 'all';     // all | book | cancel | login | park
+let actDay     = [];        // 그날의 활동 기록
+let parkMon    = [];        // 그날의 주차 기록 (기록 화면용)
+let presence   = [];        // 접속 상태
+let unsubAct = null, unsubParkMon = null, unsubPresence = null;
+let beatTimer  = null;
 
 /* ===================== 유틸 ===================== */
 function ymd(d){
@@ -681,6 +716,7 @@ function standalone(){
 }
 
 function googleLogin(){
+  if(inAppName()){ showInAppGuide(true); return; }
   const btn = document.getElementById('btnGoogle');
   btn.disabled = true;
   // 누른 즉시 연다 — 앞에 await를 두지 않는다
@@ -726,7 +762,10 @@ function warnRedirectFailed(){
   }), 400);
 }
 
-document.getElementById('btnLogout').onclick = ()=> signOut(auth);
+document.getElementById('btnLogout').onclick = async ()=>{
+  await beat(true);
+  signOut(auth);
+};
 document.getElementById('btnPendingOut').onclick = ()=> signOut(auth);
 document.getElementById('btnCopyUid').onclick = ()=>{
   const t = document.getElementById('pdEmail').textContent;
@@ -742,8 +781,11 @@ function show(which){
 onAuthStateChanged(auth, async (user)=>{
   [unsubDay, unsubWeek, unsubMine, unsubMe, unsubMembers,
    unsubMyLessons, unsubMbLessons, unsubMbBookings, unsubAllLessons,
-   unsubMon, unsubConfig, unsubParkMine, unsubParkDay].forEach(u=>{ if(u) u(); });
+   unsubMon, unsubConfig, unsubParkMine, unsubParkDay,
+   unsubAct, unsubParkMon, unsubPresence].forEach(u=>{ if(u) u(); });
   unsubConfig = unsubParkMine = unsubParkDay = null;
+  unsubAct = unsubParkMon = unsubPresence = null;
+  if(beatTimer){ clearInterval(beatTimer); beatTimer = null; }
   unsubDay = unsubWeek = unsubMine = unsubMe = unsubMembers = null;
   unsubMyLessons = unsubMbLessons = unsubMbBookings = unsubAllLessons = unsubMon = null;
 
@@ -792,6 +834,10 @@ onAuthStateChanged(auth, async (user)=>{
     s=>{ myLessons = s.docs.map(d=>({ id:d.id, ...d.data() })).sort(byLessonDate); render(); },
     ()=>{}
   );
+  // 로그인 기록 (창 하나에 한 번) + 접속 중 신호
+  logLoginOnce();
+  beat();
+  beatTimer = setInterval(beat, 60000);
   // 앱 설정 — 주차 중계 서버 주소
   unsubConfig = onSnapshot(doc(db,'config','app'),
     s=>{ parkingUrl = (s.exists() && s.data().parkingUrl) || ''; render(); },
@@ -818,7 +864,8 @@ const ICON = {
   me:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/>',
   today:'<rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 10h18M8 15h3"/>',
   members:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3 2.7-5.4 6-5.4s6 2.4 6 5.4"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M18 20c0-2.2-.8-3.9-2-5"/>',
-  stats:'<path d="M3.5 20.5h17"/><path d="M6.5 20.5v-6"/><path d="M12 20.5V5"/><path d="M17.5 20.5v-9"/>'
+  stats:'<path d="M3.5 20.5h17"/><path d="M6.5 20.5v-6"/><path d="M12 20.5V5"/><path d="M17.5 20.5v-9"/>',
+  monitor:'<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>'
 };
 function svg(k){
   return '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
@@ -826,7 +873,7 @@ function svg(k){
 }
 function buildNav(){
   const tabs = isAdmin()
-    ? [['today','현황'],['members','회원'],['book','예약'],['stats','통계'],['me','내 정보']]
+    ? [['today','현황'],['members','회원'],['book','예약'],['monitor','기록'],['stats','통계'],['me','내 정보']]
     : [['home','홈'],['book','예약'],['stats','통계'],['me','내 정보']];
   // 넓은 화면에서는 메뉴가 왼쪽 기둥이 되므로 그 머리에 로고가 붙는다
   document.getElementById('nav').innerHTML =
@@ -842,7 +889,7 @@ function go(p){
   page = p;
   const map = { home:'pgHome', book:'pgBook', me:'pgMe',
                 today:'pgToday', members:'pgMembers', member:'pgMember',
-                stats:'pgStats' };
+                stats:'pgStats', monitor:'pgMonitor' };
   Object.entries(map).forEach(([k,id])=>
     document.getElementById(id).classList.toggle('hide', k!==p));
   const navKey = (p==='member') ? 'members' : p;   // 상세 화면에서도 '회원' 탭이 켜져 있다
@@ -853,6 +900,8 @@ function go(p){
   if(p==='book' || p==='today') subscribeDay();
   if(p==='members') subscribeMembers();
   if(p==='stats'){ subscribeMembers(); loadStats(); }
+  if(p==='monitor'){ subscribeMembers(); if(!monDay) monDay = ymd(new Date()); subscribeMonitor(); }
+  beat();
   render();
 }
 function render(){
@@ -864,6 +913,7 @@ function render(){
   if(page==='members') renderMembers();
   if(page==='member')  renderMemberDetail();
   if(page==='stats')   renderStats();
+  if(page==='monitor') renderMonitor();
 }
 
 /* ===================== 실시간 구독 ===================== */
@@ -1701,10 +1751,296 @@ function parkDayHTML(){
           '<span style="font-size:14px">'+esc(l.name||'')+'</span>'+
           '<span class="num" style="font-size:14px">'+esc(l.plate||'—')+'</span>'+
           '<div class="spacer"></div><span class="sub muted">'+hhmm(l.at)+'</span>'+
+          '<button class="xdel" data-act="parkDel" data-id="'+l.id+'" aria-label="기록 삭제">✕</button>'+
         '</div>'+
         (l.ok ? '' : '<div class="sub muted" style="margin-top:6px;font-size:11.5px">'+esc(l.message||'')+'</div>')+
       '</div>').join('')
     : '<div class="empty">이 날은 주차 등록이 없어요</div>');
+}
+
+/* ===================== 활동 기록 · 접속 상태 =====================
+   activity  — 로그인, 예약, 취소, 레슨 일정, 옮기기 (관리자만 읽는다)
+   presence  — 앱을 열어 둔 사람이 1분마다 '나 여기 있어요'를 남긴다
+   기록이 실패해도 예약 같은 본래 동작은 아무 영향을 받지 않는다. */
+
+const PAGE_NAMES = { home:'홈', book:'예약', me:'내 정보', today:'현황', members:'회원',
+                     member:'회원 상세', stats:'통계', monitor:'기록' };
+
+/** 앱 안 브라우저(카카오톡 등) 이름. 일반 브라우저면 빈 문자열 */
+function inAppName(){
+  const u = navigator.userAgent || '';
+  if(/KAKAOTALK/i.test(u)) return '카카오톡';
+  if(/NAVER\(inapp|NAVER\//i.test(u)) return '네이버 앱';
+  if(/DaumApps|DaumDevice/i.test(u)) return '다음 앱';
+  if(/Instagram/i.test(u)) return '인스타그램';
+  if(/FBAN|FBAV|FB_IAB/i.test(u)) return '페이스북';
+  if(/\bLine\//i.test(u)) return '라인';
+  if(/Band\//i.test(u)) return '밴드';
+  if(/;\s?wv\)/.test(u)) return '앱 안 브라우저';
+  return '';
+}
+function isIOS(){
+  const u = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1);
+}
+function deviceName(){
+  const u = navigator.userAgent || '';
+  let d = /iPhone/.test(u) ? '아이폰'
+        : (/iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1)) ? '아이패드'
+        : /Android/.test(u) ? '안드로이드'
+        : /Macintosh|Mac OS/.test(u) ? '맥'
+        : /Windows/.test(u) ? '윈도우' : '기기';
+  const ia = inAppName();
+  d += standalone() ? ' · 홈 화면 앱' : (ia ? ' · '+ia : ' · 브라우저');
+  return d;
+}
+
+function logAct(type, o){
+  o = o || {};
+  if(!ME) return;
+  let target = '';
+  if(o.mid){
+    if(o.mid === myMid()) target = ME.name || '';
+    else { const t = members.find(x=> (x.mid||x.key) === o.mid); target = (t && t.name) || ''; }
+  }
+  addDoc(collection(db,'activity'), {
+    type,
+    actorKey: ME.key, actorName: ME.name || '', actorRole: ME.role || 'member',
+    targetName: target,
+    roomId: o.roomId || '', date: o.date || '',
+    hour: (o.hour == null ? null : o.hour), kind: o.kind || '',
+    detail: o.detail || '', device: deviceName(),
+    day: ymd(new Date()), at: serverTimestamp()
+  }).catch(()=>{});
+}
+/** 같은 창에서는 로그인 기록을 한 번만 남긴다 (새로고침마다 쌓이지 않게) */
+function logLoginOnce(){
+  let done = false;
+  try{ done = sessionStorage.getItem('rh-login-'+ME.key) === '1'; }catch(_){}
+  if(done) return;
+  try{ sessionStorage.setItem('rh-login-'+ME.key, '1'); }catch(_){}
+  logAct('login', { detail: deviceName() });
+}
+/** 접속 중 신호. off=true면 '나감'으로 남긴다 */
+function beat(off){
+  if(!ME) return Promise.resolve();
+  if(!off && document.visibilityState !== 'visible') return Promise.resolve();
+  return setDoc(doc(db,'presence',ME.key), {
+    key: ME.key, name: ME.name || '', role: ME.role || 'member', app:'app',
+    device: deviceName(), page: PAGE_NAMES[page] || '', off: !!off, at: serverTimestamp()
+  }).catch(()=>{});
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') beat(); });
+
+/* ── 기록 화면 ── */
+function subscribeMonitor(){
+  if(!isAdmin()) return;
+  if(unsubAct) unsubAct();
+  if(unsubParkMon) unsubParkMon();
+  unsubAct = onSnapshot(query(collection(db,'activity'), where('day','==', monDay)),
+    s=>{ actDay = s.docs.map(d=>({ id:d.id, ...d.data() })); if(page==='monitor') renderMonitor(); },
+    ()=>{ actDay = []; if(page==='monitor') renderMonitor(); });
+  unsubParkMon = onSnapshot(query(collection(db,'parkingLogs'), where('day','==', monDay)),
+    s=>{ parkMon = s.docs.map(d=>({ id:d.id, ...d.data() })); if(page==='monitor') renderMonitor(); },
+    ()=>{});
+  if(!unsubPresence){
+    unsubPresence = onSnapshot(collection(db,'presence'),
+      s=>{ presence = s.docs.map(d=>({ id:d.id, ...d.data() })); if(page==='monitor') renderMonitor(); },
+      ()=>{});
+  }
+}
+function tsMs(ts){ return ts && ts.toMillis ? ts.toMillis() : 0; }
+function ago(ms){
+  const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if(m < 1) return '방금';
+  if(m < 60) return m+'분 전';
+  const h = Math.floor(m/60);
+  if(h < 24) return h+'시간 전';
+  return Math.floor(h/24)+'일 전';
+}
+function slotText(x){
+  if(!x.date) return '';
+  const r = x.roomId ? roomOf(x.roomId).name+' ' : '';
+  return r + fmtDate(x.date) + (x.hour != null ? ' '+pad(x.hour)+':00' : '');
+}
+/** 기록 한 줄을 사람이 읽는 문장으로 */
+function actLine(x){
+  const who = esc(x.actorName || '누군가');
+  const tgt = esc(x.targetName || '');
+  const forOther = x.actorRole === 'admin' && tgt && x.targetName !== x.actorName;
+  const slot = esc(slotText(x));
+  switch(x.type){
+    case 'login':  return { tag:'login',  label:'로그인', l1: who+' 로그인', l2: esc(x.detail||x.device||'') };
+    case 'book':   return { tag:'book',   label:'예약',
+      l1: forOther ? who+' → '+tgt+' 예약 추가' : who+' 예약', l2: slot + (x.detail ? ' · '+esc(x.detail) : '') };
+    case 'cancel': return { tag:'cancel', label: x.kind==='lesson' ? '레슨 삭제' : '취소',
+      l1: forOther ? who+' → '+tgt+(x.kind==='lesson'?' 레슨 삭제':' 예약 취소')
+                   : who+(x.kind==='lesson'?' 레슨 삭제':' 예약 취소'),
+      l2: slot + (x.detail ? ' · '+esc(x.detail) : '') };
+    case 'lesson': return { tag:'lesson', label:'레슨',
+      l1: who+' → '+(tgt||'회원')+' 레슨 일정', l2: (x.detail ? esc(x.detail)+' · ' : '') + slot };
+    case 'move':   return { tag:'book',   label:'옮김',
+      l1: who+' → '+(tgt||'회원')+' 일정 옮김', l2: esc(x.detail||slot) };
+    case 'block':  return { tag:'',       label:'닫음', l1: who+' 시간 닫음', l2: slot };
+    case 'open':   return { tag:'',       label:'열음', l1: who+' 닫은 시간 다시 열음', l2: slot };
+    default:       return { tag:'',       label:x.type, l1: who, l2: esc(x.detail||'') };
+  }
+}
+function renderMonitor(){
+  if(!isAdmin()) return;
+  const now = Date.now();
+  const isToday = monDay === ymd(new Date());
+
+  // 접속 중 = 2분 안에 신호가 있었고 '나감'이 아닌 사람
+  const live = presence.filter(p=> !p.off && now - tsMs(p.at) < 150000)
+                       .sort((a,b)=> tsMs(b.at) - tsMs(a.at));
+  const recent = presence.filter(p=> !live.includes(p) && tsMs(p.at))
+                         .sort((a,b)=> tsMs(b.at) - tsMs(a.at)).slice(0, 12);
+
+  const pill = (p, on)=>
+    '<span class="online'+(on?'':' idle')+'"><i></i>'+
+      '<span>'+esc(p.app==='board' ? '입구 현황판' : (p.name||p.key))+'</span>'+
+      '<small>'+esc(on ? ((p.page ? p.page+' · ' : '') + (p.device||'')) : ago(tsMs(p.at)))+'</small>'+
+    '</span>';
+
+  // 활동 + 주차를 한 줄 시간표로 합친다
+  const rows = actDay.map(x=>({ ...x, _src:'act', _ms: tsMs(x.at) }))
+    .concat(parkMon.map(x=>({ ...x, _src:'park', type:'park', _ms: tsMs(x.at) })))
+    .sort((a,b)=> b._ms - a._ms);
+
+  const groupOf = x => x.type==='park' ? 'park'
+                     : x.type==='login' ? 'login'
+                     : x.type==='cancel' ? 'cancel'
+                     : 'book';
+  const count = f => rows.filter(x=> f==='all' || groupOf(x)===f).length;
+  const shown = rows.filter(x=> monFilter==='all' || groupOf(x)===monFilter);
+
+  const filters = [['all','전체'],['book','예약'],['cancel','취소'],['login','로그인'],['park','주차']]
+    .map(([k,l])=> '<button data-act="monFilter" data-f="'+k+'" class="'+(monFilter===k?'on':'')+'">'+
+                   l+' <small style="opacity:.7">'+count(k)+'</small></button>').join('');
+
+  const list = shown.length ? shown.map(x=>{
+    let line;
+    if(x._src === 'park'){
+      line = { tag:'park', label: x.ok ? (x.already ? '주차 · 이미 등록' : '주차 등록') : '주차 실패',
+               l1: esc(x.name||'')+' · '+esc(x.plate||'—'),
+               l2: x.ok ? (x.entryAt ? esc(x.entryAt.slice(11,16))+' 입차' : '') : esc(x.message||'') };
+    } else line = actLine(x);
+    const t = x._ms ? new Date(x._ms) : null;
+    return '<div class="act">'+
+      '<div class="t">'+(t ? pad(t.getHours())+':'+pad(t.getMinutes()) : '—')+'</div>'+
+      '<div class="b"><div class="l1"><span class="atag '+line.tag+'">'+esc(line.label)+'</span>'+line.l1+'</div>'+
+        (line.l2 ? '<div class="l2">'+line.l2+'</div>' : '')+'</div>'+
+      '<button class="xdel" data-act="'+(x._src==='park'?'parkDel':'actDel')+'" data-id="'+x.id+'" aria-label="기록 삭제">✕</button>'+
+    '</div>';
+  }).join('') : '<div class="empty">이 날은 기록이 없어요</div>';
+
+  document.getElementById('pgMonitor').innerHTML =
+    '<div class="row"><div class="h1" style="font-size:19px">기록</div><div class="spacer"></div>'+
+      '<span class="sub muted">실시간</span></div>'+
+
+    '<div class="sec"><span>지금 접속 중</span><span>'+live.length+'명</span></div>'+
+    (live.length ? '<div>'+live.map(p=>pill(p,true)).join('')+'</div>'
+                 : '<div class="sub muted" style="padding:4px 2px 2px">지금 앱을 열어 둔 사람이 없어요</div>')+
+    (recent.length
+      ? '<div class="sub muted" style="margin:12px 2px 8px">최근 접속</div><div>'+recent.map(p=>pill(p,false)).join('')+'</div>'
+      : '')+
+
+    '<div class="row" style="margin-top:22px;gap:8px">'+
+      '<button class="btn sm" data-act="monShift" data-n="-1">‹</button>'+
+      '<div class="num" style="flex:1;text-align:center;font-size:15px">'+fmtDate(monDay)+'</div>'+
+      '<button class="btn sm" data-act="monShift" data-n="1"'+(isToday?' disabled':'')+'>›</button>'+
+      (isToday ? '' : '<button class="btn sm" data-act="monToday">오늘</button>')+
+    '</div>'+
+    '<div class="modes" style="margin-top:12px">'+filters+'</div>'+
+    '<div style="margin-top:12px">'+list+'</div>'+
+    '<div class="sub muted" style="margin-top:14px;line-height:1.7">'+
+      '✕ 를 누르면 기록만 지워져요. 예약이나 주차 할인 자체는 그대로예요.</div>';
+  bind('pgMonitor');
+}
+// 접속 표시의 '방금 / n분 전'이 저절로 바뀌도록 30초마다 다시 그린다
+setInterval(()=>{ if(page==='monitor' && ME) renderMonitor(); }, 30000);
+
+function actDelete(id){
+  ask({ title:'이 기록을 지울까요?', body:'기록만 지워집니다. 예약 자체는 바뀌지 않아요.', ok:'지우기',
+    onOk: async ()=>{
+      try{ await deleteDoc(doc(db,'activity',id)); toast('지웠어요'); }
+      catch(e){ toast('지우지 못했어요 — 보안 규칙을 새로 붙여넣었는지 확인해 주세요'); }
+    }});
+}
+/** 주차 기록 삭제 — 성공 기록이면 그날 그 회원의 횟수도 하나 돌려준다 */
+function parkDelete(id){
+  const l = parkDay.concat(parkMon).find(x=> x.id === id);
+  if(!l) return;
+  const refund = l.ok && !l.already;
+  ask({ title:'주차 기록을 지울까요?',
+    body: esc(l.name||'')+' · '+esc(l.plate||'')+
+          (refund ? '<br><br><span style="color:var(--white-room)">이 회원의 오늘 주차 횟수가 1회 돌아갑니다.</span>' : '')+
+          '<br><br><span class="muted">주차 사이트에 등록된 할인은 취소되지 않아요.</span>',
+    ok:'지우기',
+    onOk: async ()=>{
+      try{
+        await deleteDoc(doc(db,'parkingLogs', id));
+        if(refund && l.memberKey && l.day){
+          const ref = doc(db,'parkingDaily', l.memberKey+'_'+l.day);
+          const snap = await getDoc(ref);
+          if(snap.exists())
+            await updateDoc(ref, { ok: Math.max(0, (snap.data().ok||0) - 1) });
+        }
+        toast('지웠어요');
+      }catch(e){ console.error(e); toast('지우지 못했어요 — 보안 규칙을 새로 붙여넣었는지 확인해 주세요'); }
+    }});
+}
+
+/* ── 앱 안 브라우저(카카오톡 등)에서는 구글 로그인이 막힌다 ──
+   카카오톡·안드로이드는 바깥 브라우저로 바로 넘기고,
+   아이폰의 다른 앱은 '사파리로 열기'를 안내한다. */
+function openExternal(){
+  const url = location.href;
+  const u = navigator.userAgent || '';
+  if(/KAKAOTALK/i.test(u)){
+    location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+    return;
+  }
+  if(/Android/i.test(u)){
+    location.href = 'intent://' + url.replace(/^https?:\/\//,'') +
+      '#Intent;scheme=https;package=com.android.chrome;end';
+    return;
+  }
+  copyLink();
+}
+function copyLink(){
+  const url = location.href.split('#')[0];
+  const done = ()=> toast('주소를 복사했어요. 사파리 주소창에 붙여넣으세요');
+  if(navigator.clipboard) navigator.clipboard.writeText(url).then(done).catch(()=> toast(url));
+  else toast(url);
+}
+function showInAppGuide(tried){
+  const name = inAppName();
+  const box = document.getElementById('inAppBox');
+  if(!box) return;
+  if(!name){ box.innerHTML = ''; return; }
+  const ios = isIOS();
+  const canJump = /KAKAOTALK/i.test(navigator.userAgent) || /Android/i.test(navigator.userAgent);
+  box.innerHTML =
+    '<div class="inapp">'+
+      '<b>'+esc(name)+' 안에서는 구글 로그인이 안 돼요</b><br>'+
+      (canJump
+        ? (ios ? '사파리' : '크롬')+'로 열면 바로 로그인할 수 있어요.'
+        : '오른쪽 아래(또는 위) <b>⋯</b> 버튼 → <b>Safari로 열기</b>를 눌러 주세요.')+
+      (canJump
+        ? '<button class="btn primary" data-act="openExternal">'+(ios?'사파리':'크롬')+'로 열기</button>'
+        : '<button class="btn" data-act="copyLink">주소 복사하기</button>')+
+    '</div>';
+  box.querySelectorAll('[data-act]').forEach(el=> el.onclick = ()=> handle(el.dataset));
+  if(tried) box.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+// 열자마자 확인 — 카카오톡이면 바깥 브라우저로 한 번 넘겨 본다
+showInAppGuide(false);
+if(/KAKAOTALK/i.test(navigator.userAgent || '')){
+  let jumped = false;
+  try{ jumped = sessionStorage.getItem('rh-jumped') === '1'; sessionStorage.setItem('rh-jumped','1'); }catch(_){}
+  if(!jumped) setTimeout(openExternal, 400);
 }
 
 /* ===================== 통계 =====================
@@ -2275,6 +2611,13 @@ async function handle(d){
     case 'parkForm':  parkForm(); break;
     case 'parkSetup': parkSetup(); break;
     case 'parkPing':  parkPing(); break;
+    case 'parkDel':   parkDelete(d.id); break;
+    case 'actDel':    actDelete(d.id); break;
+    case 'monShift':  monDay = ymd(addDays(parseYmd(monDay), Number(d.n))); subscribeMonitor(); renderMonitor(); break;
+    case 'monToday':  monDay = ymd(new Date()); subscribeMonitor(); renderMonitor(); break;
+    case 'monFilter': monFilter = d.f; renderMonitor(); break;
+    case 'openExternal': openExternal(); break;
+    case 'copyLink':  copyLink(); break;
   }
 }
 
@@ -2344,6 +2687,8 @@ async function doBook(hour){
       }
     });
     toast('예약되었어요');
+    logAct('book', { roomId:selRoom, date:selDate, hour, mid: myMid(), kind:'practice',
+                     detail: admin ? '' : '연습권 차감' });
   }catch(e){
     if(e.message==='TAKEN') toast('방금 다른 분이 예약했어요');
     else if(e.message==='NOCREDIT') toast('연습권이 부족해요');
@@ -2390,6 +2735,8 @@ async function doCancel(b){
       }
     });
     toast('예약이 취소되었어요');
+    logAct('cancel', { roomId:b.roomId, date:b.date, hour:b.hour, mid:b.memberId, kind:b.kind,
+                       detail: refund ? '연습권 환급' : '' });
   }catch(e){
     if(e.message==='GONE') toast('이미 취소된 예약이에요');
     else { console.error(e); toast('취소에 실패했어요'); }
@@ -2475,6 +2822,9 @@ async function writeSlot(roomId, hour, extra){
       roomId, roomName:r.name, date:selDate, hour,
       addedByAdmin:true, createdAt:serverTimestamp(), ...extra
     });
+    logAct(extra.kind==='block' ? 'block' : (extra.kind==='lesson' ? 'lesson' : 'book'),
+      { roomId, date:selDate, hour, mid: extra.memberId || '', kind: extra.kind,
+        detail: extra.kind==='practice' ? (extra.usesCredit ? '관리자 추가 · 연습권 차감' : '관리자 추가') : '' });
   }catch(e){ console.error(e); toast('저장에 실패했어요'); }
 }
 function admCancel(id){
@@ -2506,6 +2856,9 @@ function admCancel(id){
         } else {
           await deleteDoc(doc(db,'bookings',b.id));
         }
+        logAct(b.kind==='block' ? 'open' : 'cancel',
+          { roomId:b.roomId, date:b.date, hour:b.hour, mid:b.memberId, kind:b.kind,
+            detail: '관리자 처리' + (usesCredit(b) ? ' · 연습권 환급' : '') });
         toast('처리했어요');
       }catch(e){ console.error(e); toast('처리에 실패했어요'); }
     }
@@ -2710,6 +3063,8 @@ function planLessons(key){
       if(any) made++; else skipped.push(fmtDate(ds));
     }
 
+    if(made) logAct('lesson', { roomId:room, date, hour:startHour, mid:(m.mid||m.key), kind:'lesson',
+                                detail:'레슨 '+made+'회 일정 등록 · '+time });
     info({ title: made ? '레슨 일정을 '+made+'회 잡았어요' : '잡은 일정이 없어요',
       body: esc(m.name||'회원')+' · '+r.name+'<br>'+
         time+' ~ '+toHM(toMin(time)+LESSON_MIN)+' 레슨 · 연습실 '+hold+'시간 확보'+
@@ -2779,6 +3134,8 @@ function moveBooking(id){
         addedByAdmin:true, createdAt: serverTimestamp()
       });
       if(nid !== b.id) await deleteDoc(doc(db,'bookings',b.id));
+      logAct('move', { roomId:room, date, hour, mid:b.memberId, kind:b.kind,
+                       detail: fmtDate(b.date)+' '+pad(b.hour)+':00 → '+fmtDate(date)+' '+time });
       toast(fmtDate(date)+' '+time+'으로 옮겼어요');
     }catch(e){ console.error(e); toast('옮기지 못했어요'); }
   };
@@ -2820,7 +3177,12 @@ function admCancelAny(id){
     body: fmtDate(b.date)+' '+pad(b.hour)+':00 · '+roomOf(b.roomId).name,
     ok: b.kind==='lesson' ? '레슨 삭제' : '예약 취소',
     onOk: async ()=>{
-      try{ await deleteDoc(doc(db,'bookings',id)); toast('처리했어요'); }
+      try{
+        await deleteDoc(doc(db,'bookings',id));
+        logAct('cancel', { roomId:b.roomId, date:b.date, hour:b.hour, mid:b.memberId, kind:b.kind,
+                           detail:'관리자 처리' });
+        toast('처리했어요');
+      }
       catch(e){ console.error(e); toast('처리에 실패했어요'); }
     }
   });

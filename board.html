@@ -233,7 +233,7 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
   <div class="ft">
     <div class="slogan">드러머는 연습으로 만들어집니다</div>
     <div class="sp"></div>
-    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v18</span></div>
+    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v19</span></div>
   </div>
 </div>
 
@@ -242,7 +242,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged,
          setPersistence, browserLocalPersistence }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot }
+import { getFirestore, collection, query, where, onSnapshot, doc, setDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -306,9 +306,21 @@ function login(){
 onAuthStateChanged(auth, user=>{
   document.getElementById('scLogin').classList.toggle('hide', !!user);
   document.getElementById('scBoard').classList.toggle('hide', !user);
-  if(user) subscribe();
+  if(user){ subscribe(); boardBeat(); }
   else { if(unsub){ unsub(); unsub=null; } if(unsubWeek){ unsubWeek(); unsubWeek=null; } }
 });
+
+/* 관리자 '기록' 화면에 "입구 현황판 켜져 있음"으로 보이게 1분마다 신호를 남긴다 */
+function boardBeat(){
+  const u = auth.currentUser;
+  if(!u || !u.email) return;
+  const key = u.email.trim().toLowerCase();
+  setDoc(doc(db,'presence', key+'_board'), {
+    key, name:'입구 현황판', role:'board', app:'board',
+    device:'입구 모니터', page:'현황판', off:false, at: serverTimestamp()
+  }).catch(()=>{});
+}
+setInterval(boardBeat, 60000);
 
 /* ── 데이터 ── */
 function subscribe(){
