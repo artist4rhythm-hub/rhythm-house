@@ -188,6 +188,41 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
   border:0;font-family:var(--f-head);font-size:16px;cursor:pointer}
 .login .msg{font-size:13px;color:var(--mute);max-width:320px;text-align:center;line-height:1.7}
 .hide{display:none !important}
+
+/* ================= 화면 보호 =================
+   어떤 모니터(LCD·OLED·TV)에 띄워도 같은 자리가 오래 같은 빛을 내지 않게 한다.
+   1) 화면 전체가 1분마다 몇 픽셀씩 자리를 옮긴다 (8방향을 차례로 돈다)
+   2) 배경 밝기와 은은한 빛 무늬가 30분에 걸쳐 천천히 흐른다
+   3) 로고·문구·제목처럼 바뀌지 않는 부분은 한 단계 어둡게
+   4) 아무도 안 쓰고 다음 예약이 30분 넘게 남으면 '쉬는 화면'으로 바뀐다 */
+#scBoard{transform:translate(var(--sx,0px),var(--sy,0px));transition:transform 3s ease-in-out}
+body{animation:bgtone 1800s ease-in-out infinite alternate}
+@keyframes bgtone{0%{background-color:#0B1A2A}50%{background-color:#091623}100%{background-color:#0D1D30}}
+body::before{content:'';position:fixed;inset:-25%;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(40% 35% at 30% 30%, rgba(92,130,173,.10), transparent 70%),
+    radial-gradient(35% 40% at 70% 70%, rgba(200,70,58,.06), transparent 70%);
+  animation:bgdrift 1800s ease-in-out infinite alternate}
+@keyframes bgdrift{0%{transform:translate(-6%,-4%)}50%{transform:translate(5%,3%)}100%{transform:translate(-3%,6%)}}
+.hd img,.lg,.tag,.slogan,.keys,.shead b{opacity:.7}
+.clock{opacity:.9}
+
+/* 쉬는 화면 — 검은 바탕 위로 로고·시계·지금 상황이 천천히 떠다닌다 */
+.rest{position:fixed;inset:0;background:#000;z-index:50;cursor:none;overflow:hidden}
+.rbox{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;
+  text-align:center;opacity:.6;transition:transform 8s ease-in-out;
+  animation:rtone 1200s linear infinite}
+@keyframes rtone{0%{color:#E9DCC4}33%{color:#AFC4DC}66%{color:#D9C08F}100%{color:#E9DCC4}}
+.rbox img{width:5.6rem;height:auto;opacity:.75}
+.rlg{font-family:var(--f-logo);font-size:2.4rem;line-height:1.2;margin-top:.4rem}
+.rclock{font-family:var(--f-head);font-size:6.5rem;line-height:1;margin-top:1.4rem;letter-spacing:.1rem}
+.rdate{font-size:1.15rem;opacity:.75;margin-top:.5rem}
+.rnow{font-size:1.15rem;margin-top:1.6rem;opacity:.9}
+.rrooms{display:flex;gap:2.4rem;margin-top:1rem}
+.rroom{font-size:1.1rem;line-height:1.6;min-width:9rem}
+.rroom b{font-family:var(--f-head);font-weight:400;font-size:1.25rem;display:block}
+.rroom span{opacity:.75}
+.rhint{font-size:.85rem;opacity:.45;margin-top:1.6rem}
 </style>
 </head>
 <body>
@@ -233,7 +268,19 @@ body{background:var(--ground);color:var(--cream);font-family:var(--f-body)}
   <div class="ft">
     <div class="slogan">드러머는 연습으로 만들어집니다</div>
     <div class="sp"></div>
-    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v19</span></div>
+    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v20</span></div>
+  </div>
+</div>
+
+<div class="rest hide" id="scRest">
+  <div class="rbox" id="rBox">
+    <img src="logo.png" alt="">
+    <div class="rlg">Rhythm House</div>
+    <div class="rclock" id="rClock">--:--</div>
+    <div class="rdate" id="rDate"></div>
+    <div class="rnow" id="rNow"></div>
+    <div class="rrooms" id="rRooms"></div>
+    <div class="rhint">화면을 누르면 전체 현황이 보여요</div>
   </div>
 </div>
 
@@ -458,6 +505,7 @@ function paint(){
   }
   document.getElementById('dWeek').innerHTML = rows.join('')+
     '<i class="nowline soft" style="left:'+nowLeft(1)+'"></i>';
+  updateRest(now);
 }
 
 /* ── 시계 / 자정 넘김 ── */
@@ -470,12 +518,126 @@ function tick(){
   if(ymd(now) !== today && auth.currentUser) subscribe();   // 날짜가 바뀌면 다시 구독
 }
 /* 분이 바뀔 때마다 다시 그린다 — 5분 전 안내가 제때 뜨도록 */
+/* ================= 화면 보호 ================= */
+const REST_BEFORE_MIN = 30;    // 예약 30분 전부터는 쉬는 화면을 끄고 전체 현황을 보여준다
+const WAKE_MIN        = 3;     // 화면을 건드리면 3분 동안 전체 현황
+const ORBIT = [[0,0],[4,-3],[6,0],[4,3],[0,5],[-4,3],[-6,0],[-4,-3]];   // 픽셀 단위
+const qs = new URLSearchParams(location.search);
+const FORCE_REST = qs.has('rest');     // 미리보기: board.html?rest
+const NO_REST    = qs.has('norest');   // 쉬는 화면 끄기: board.html?norest
+let orbitIdx = 0, wakeUntil = 0, resting = false, restPos = null;
+
+/** 1분마다 화면 전체를 다음 자리로 옮긴다 */
+function shiftOrbit(){
+  orbitIdx = (orbitIdx + 1) % ORBIT.length;
+  const [x,y] = ORBIT[orbitIdx];
+  const el = document.getElementById('scBoard');
+  el.style.setProperty('--sx', x+'px');
+  el.style.setProperty('--sy', y+'px');
+}
+
+function startMin(b){
+  if(b.kind==='lesson' && b.lessonAt){
+    const [hh,mm] = String(b.lessonAt).split(':').map(Number);
+    return (hh||0)*60 + (mm||0);
+  }
+  return b.hour*60;
+}
+/** 지금 쓰는 방이 있는가, 다음 예약까지 몇 분 남았는가 */
+function restState(now){
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  const live = items.filter(b=> b.kind!=='block');
+  const busy = live.some(b=> b.hour === now.getHours());
+  const upcoming = live.map(b=>({ b, m:startMin(b) })).filter(x=> x.m > nowMin)
+                       .sort((a,b)=> a.m - b.m);
+  const nextIn = upcoming.length ? upcoming[0].m - nowMin : Infinity;
+  return { busy, nextIn };
+}
+function updateRest(now){
+  const st = restState(now);
+  const want = !NO_REST && (FORCE_REST ||
+    (!st.busy && st.nextIn > REST_BEFORE_MIN && Date.now() > wakeUntil));
+  if(want !== resting){
+    resting = want;
+    document.getElementById('scRest').classList.toggle('hide', !want);
+    if(want) restPos = null;
+  }
+  if(resting) paintRest(now);
+}
+
+/** 내일 첫 예약 (이번 주 자료 안에 있을 때만) */
+function tomorrowFirst(roomId, now){
+  const t = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate()+1));
+  return weekItems.filter(b=> b.date===t && b.roomId===roomId && b.kind!=='block')
+                  .sort((a,b)=> startMin(a)-startMin(b))[0];
+}
+function paintRest(now){
+  const days = ['일','월','화','수','목','금','토'];
+  document.getElementById('rClock').textContent = pad(now.getHours())+':'+pad(now.getMinutes());
+  document.getElementById('rDate').textContent =
+    (now.getMonth()+1)+'월 '+now.getDate()+'일 '+days[now.getDay()]+'요일';
+  const nowMin = now.getHours()*60 + now.getMinutes();
+
+  const lines = ROOMS.map(r=>{
+    const mine = items.filter(b=> b.roomId===r.id && b.kind!=='block');
+    const cur  = mine.find(b=> b.hour === now.getHours());
+    const next = mine.filter(b=> startMin(b) > nowMin).sort((a,b)=> startMin(a)-startMin(b))[0];
+    let nextTxt;
+    if(next) nextTxt = '다음 '+(next.kind==='lesson' && next.lessonAt ? next.lessonAt : pad(next.hour)+':00');
+    else {
+      const tm = tomorrowFirst(r.id, now);
+      nextTxt = tm ? '내일 '+(tm.kind==='lesson' && tm.lessonAt ? tm.lessonAt : pad(tm.hour)+':00')
+                   : '오늘 남은 예약 없음';
+    }
+    return '<div class="rroom"><b>'+r.name+'</b>'+
+      '<span>'+(cur ? '사용 중' : '비어 있음')+'</span><br>'+
+      '<span>'+nextTxt+'</span></div>';
+  });
+  const anyBusy = ROOMS.some(r=> items.some(b=> b.roomId===r.id && b.kind!=='block' && b.hour===now.getHours()));
+  document.getElementById('rNow').textContent = anyBusy ? '지금 연습 중인 방이 있어요' : '지금은 두 방 모두 비어 있어요';
+  document.getElementById('rRooms').innerHTML = lines.join('');
+  moveRest();
+}
+/** 1분마다 화면의 다른 구역으로 떠간다 — 직전 자리와 충분히 떨어진 곳으로 */
+function moveRest(){
+  const box = document.getElementById('rBox');
+  const W = window.innerWidth, H = window.innerHeight;
+  const bw = box.offsetWidth, bh = box.offsetHeight;
+  const maxX = Math.max(0, W - bw), maxY = Math.max(0, H - bh);
+  let x, y, tries = 0;
+  do {
+    x = Math.random() * maxX; y = Math.random() * maxY; tries++;
+  } while(restPos && tries < 20 &&
+          Math.hypot(x - restPos[0], y - restPos[1]) < Math.min(W,H) * 0.25);
+  restPos = [x, y];
+  box.style.transform = 'translate('+Math.round(x)+'px,'+Math.round(y)+'px)';
+}
+/** 화면을 건드리면 3분 동안 전체 현황 */
+function wake(){
+  if(FORCE_REST) return;
+  wakeUntil = Date.now() + WAKE_MIN*60000;
+  if(resting){
+    resting = false;
+    document.getElementById('scRest').classList.add('hide');
+  }
+}
+['pointerdown','touchstart','keydown'].forEach(ev=> addEventListener(ev, wake, { passive:true }));
+let lastMove = 0;
+addEventListener('mousemove', e=>{
+  // 마우스가 미세하게 떨리는 정도로는 깨우지 않는다
+  if(Math.abs(e.movementX) + Math.abs(e.movementY) < 8) return;
+  if(Date.now() - lastMove < 1000) return;
+  lastMove = Date.now(); wake();
+});
+// 깨운 뒤 3분이 지나면 다시 판단한다
+setInterval(()=>{ if(!resting && wakeUntil && Date.now() > wakeUntil && auth.currentUser){ wakeUntil = 0; updateRest(new Date()); } }, 15000);
+
 let lastMinute = -1;
 tick();
 setInterval(()=>{
   tick();
   const m = new Date().getMinutes();
-  if(m !== lastMinute){ lastMinute = m; if(auth.currentUser) paint(); }
+  if(m !== lastMinute){ lastMinute = m; shiftOrbit(); if(auth.currentUser) paint(); }
 }, 1000);
 </script>
 </body>
