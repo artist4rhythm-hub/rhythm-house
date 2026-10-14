@@ -223,6 +223,13 @@ body::before{content:'';position:fixed;inset:-25%;z-index:-1;pointer-events:none
 .rroom b{font-family:var(--f-head);font-weight:400;font-size:1.25rem;display:block}
 .rroom span{opacity:.75}
 .rhint{font-size:.85rem;opacity:.45;margin-top:1.6rem}
+.hd img{cursor:pointer}
+/* 미리보기 — 움직임이 바로 보이도록 빠르게, 위쪽에 안내 띠 */
+.rest.preview .rbox{transition-duration:3.5s}
+.rpv{position:absolute;top:1.4rem;left:50%;transform:translateX(-50%);font-size:1rem;
+  color:#F3E7D2;background:rgba(200,70,58,.85);padding:.45rem 1.1rem;border-radius:2rem;
+  white-space:nowrap;display:none}
+.rest.preview .rpv{display:block}
 </style>
 </head>
 <body>
@@ -237,7 +244,7 @@ body::before{content:'';position:fixed;inset:-25%;z-index:-1;pointer-events:none
 
 <div class="screen hide" id="scBoard">
   <div class="hd">
-    <img src="logo.png" alt="">
+    <img src="logo.png" alt="쉬는 화면 미리보기" id="logoBtn" title="누르면 쉬는 화면 미리보기">
     <div>
       <div class="lg">Rhythm House</div>
       <div class="tag">연습실 실시간 현황</div>
@@ -268,11 +275,12 @@ body::before{content:'';position:fixed;inset:-25%;z-index:-1;pointer-events:none
   <div class="ft">
     <div class="slogan">드러머는 연습으로 만들어집니다</div>
     <div class="sp"></div>
-    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v20</span></div>
+    <div class="keys">ACOUSTIC · TRAINING · REPEAT · <span id="ver">v21</span></div>
   </div>
 </div>
 
 <div class="rest hide" id="scRest">
+  <div class="rpv" id="rPv">미리보기 · 화면을 누르면 돌아가요</div>
   <div class="rbox" id="rBox">
     <img src="logo.png" alt="">
     <div class="rlg">Rhythm House</div>
@@ -526,6 +534,36 @@ const qs = new URLSearchParams(location.search);
 const FORCE_REST = qs.has('rest');     // 미리보기: board.html?rest
 const NO_REST    = qs.has('norest');   // 쉬는 화면 끄기: board.html?norest
 let orbitIdx = 0, wakeUntil = 0, resting = false, restPos = null;
+let previewUntil = 0, previewTimer = null;
+const PREVIEW_SEC = 60;
+
+/** 로고를 누르면 쉬는 화면을 60초 동안 미리 본다 (관리자 확인용) */
+function startPreview(){
+  previewUntil = Date.now() + PREVIEW_SEC*1000;
+  resting = true;
+  const el = document.getElementById('scRest');
+  el.classList.remove('hide');
+  el.classList.add('preview');
+  restPos = null;
+  paintRest(new Date());
+  if(previewTimer) clearInterval(previewTimer);
+  previewTimer = setInterval(()=>{
+    const left = Math.ceil((previewUntil - Date.now())/1000);
+    if(left <= 0){ endPreview(); return; }
+    document.getElementById('rPv').textContent = '미리보기 · 화면을 누르면 돌아가요 · '+left+'초';
+    moveRest();
+  }, 5000);
+  document.getElementById('rPv').textContent = '미리보기 · 화면을 누르면 돌아가요 · '+PREVIEW_SEC+'초';
+}
+function endPreview(){
+  if(previewTimer){ clearInterval(previewTimer); previewTimer = null; }
+  previewUntil = 0;
+  const el = document.getElementById('scRest');
+  el.classList.remove('preview');
+  el.classList.add('hide');
+  resting = false;
+  wakeUntil = Date.now() + WAKE_MIN*60000;   // 돌아온 뒤 3분은 전체 현황
+}
 
 /** 1분마다 화면 전체를 다음 자리로 옮긴다 */
 function shiftOrbit(){
@@ -554,6 +592,7 @@ function restState(now){
   return { busy, nextIn };
 }
 function updateRest(now){
+  if(previewUntil){ paintRest(now); return; }
   const st = restState(now);
   const want = !NO_REST && (FORCE_REST ||
     (!st.busy && st.nextIn > REST_BEFORE_MIN && Date.now() > wakeUntil));
@@ -613,7 +652,12 @@ function moveRest(){
   box.style.transform = 'translate('+Math.round(x)+'px,'+Math.round(y)+'px)';
 }
 /** 화면을 건드리면 3분 동안 전체 현황 */
-function wake(){
+function wake(e){
+  if(previewUntil){
+    // 로고를 누른 바로 그 손짓은 무시한다
+    if(Date.now() < previewUntil - PREVIEW_SEC*1000 + 700) return;
+    endPreview(); return;
+  }
   if(FORCE_REST) return;
   wakeUntil = Date.now() + WAKE_MIN*60000;
   if(resting){
@@ -624,6 +668,7 @@ function wake(){
 ['pointerdown','touchstart','keydown'].forEach(ev=> addEventListener(ev, wake, { passive:true }));
 let lastMove = 0;
 addEventListener('mousemove', e=>{
+  if(previewUntil) return;   // 미리보기는 클릭(터치)으로만 끝낸다
   // 마우스가 미세하게 떨리는 정도로는 깨우지 않는다
   if(Math.abs(e.movementX) + Math.abs(e.movementY) < 8) return;
   if(Date.now() - lastMove < 1000) return;
@@ -631,6 +676,11 @@ addEventListener('mousemove', e=>{
 });
 // 깨운 뒤 3분이 지나면 다시 판단한다
 setInterval(()=>{ if(!resting && wakeUntil && Date.now() > wakeUntil && auth.currentUser){ wakeUntil = 0; updateRest(new Date()); } }, 15000);
+
+document.getElementById('logoBtn').addEventListener('click', e=>{
+  e.stopPropagation();
+  startPreview();
+});
 
 let lastMinute = -1;
 tick();
