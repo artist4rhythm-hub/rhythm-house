@@ -370,6 +370,34 @@ textarea:focus{outline:none;border-color:var(--black-room)}
 .inapp b{font-family:var(--f-head);color:#FFE9BF}
 .inapp .btn{margin-top:12px;width:100%;height:46px}
 
+/* ---------- 안내 서랍 ---------- */
+.notice-box{margin-top:14px;background:var(--surf);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.notice-box .nhead{display:flex;align-items:center;padding:13px 16px 9px;font-size:12px;color:var(--dim)}
+.nitem{border-top:1px solid var(--line-soft)}
+.nitem:first-of-type{border-top:0}
+.nbtn{width:100%;display:flex;align-items:center;gap:11px;padding:13px 16px;text-align:left}
+.nbtn .ic{width:30px;height:30px;border-radius:9px;background:var(--deep);display:flex;
+  align-items:center;justify-content:center;font-size:16px;flex:none}
+.nbtn .tt{flex:1;min-width:0;font-family:var(--f-head);font-size:15px;line-height:1.35}
+.nbtn .pv{font-size:11.5px;color:var(--mute);font-family:var(--f-body);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nbtn .chev{width:18px;height:18px;flex:none;color:var(--mute);transition:transform .2s}
+.nitem.open .chev{transform:rotate(180deg)}
+.nitem.open .pv{display:none}
+.nbody{display:none;padding:0 16px 15px 57px}
+.nitem.open .nbody{display:block}
+.nbody .tx{font-size:14px;line-height:1.75;color:var(--cream);white-space:pre-wrap;word-break:break-word}
+.nbody .tx a{color:var(--red-l)}
+.nbody .cp{margin-top:10px;height:30px;padding:0 12px;border-radius:9px;border:1px solid var(--line);
+  font-size:12px;color:var(--dim)}
+.nadm{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line-soft)}
+.nadm:first-child{border-top:0}
+.nadm .tt{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nadm .off{font-size:10.5px;color:var(--mute);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px}
+.icpick{display:flex;flex-wrap:wrap;gap:6px}
+.icpick button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);font-size:18px;background:var(--deep)}
+.icpick button.on{border-color:var(--red);background:#3A1A16}
+
 /* ---------- 타임라인 ---------- */
 .tl{display:flex;gap:8px}
 .tl .axis{width:40px;flex-shrink:0}
@@ -533,7 +561,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v21 · 2026-10-14';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v22 · 2026-10-15';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -564,6 +592,9 @@ let statRows  = [];         // (관리자) 그 기간의 예약 전체
 let statState = 'idle';     // idle | load | done | fail
 let statKey   = '';         // 지금 담겨 있는 자료의 시작일 (같으면 다시 안 부른다)
 let parkingUrl = '';        // 주차 중계 서버 주소 (config/app 에 관리자가 넣는다)
+let notices    = [];        // 안내 항목 (config/notices) — 주소 · 주차 · 와이파이 · 출입문 등
+let unsubNotices = null;
+let openNotices = new Set((()=>{ try{ return JSON.parse(localStorage.getItem('rh-open-notices')||'[]'); }catch(_){ return []; } })());
 let parkMine   = [];        // 오늘 내 주차 등록 기록
 let parkDay    = [];        // (관리자) 현황에서 보는 날의 주차 등록 기록
 let parkBusy   = false;     // 등록 요청이 날아가는 중
@@ -782,7 +813,8 @@ onAuthStateChanged(auth, async (user)=>{
   [unsubDay, unsubWeek, unsubMine, unsubMe, unsubMembers,
    unsubMyLessons, unsubMbLessons, unsubMbBookings, unsubAllLessons,
    unsubMon, unsubConfig, unsubParkMine, unsubParkDay,
-   unsubAct, unsubParkMon, unsubPresence].forEach(u=>{ if(u) u(); });
+   unsubAct, unsubParkMon, unsubPresence, unsubNotices].forEach(u=>{ if(u) u(); });
+  unsubNotices = null;
   unsubConfig = unsubParkMine = unsubParkDay = null;
   unsubAct = unsubParkMon = unsubPresence = null;
   if(beatTimer){ clearInterval(beatTimer); beatTimer = null; }
@@ -839,6 +871,10 @@ onAuthStateChanged(auth, async (user)=>{
   beat();
   beatTimer = setInterval(beat, 60000);
   // 앱 설정 — 주차 중계 서버 주소
+  // 안내 항목 — 회원 홈 맨 위 서랍
+  unsubNotices = onSnapshot(doc(db,'config','notices'),
+    s=>{ notices = (s.exists() && Array.isArray(s.data().items)) ? s.data().items : []; render(); },
+    ()=>{});
   unsubConfig = onSnapshot(doc(db,'config','app'),
     s=>{ parkingUrl = (s.exists() && s.data().parkingUrl) || ''; render(); },
     ()=>{});
@@ -1084,6 +1120,7 @@ function renderHome(){
 
   document.getElementById('pgHome').innerHTML =
     '<div class="h1">'+esc(ME.name||'회원')+'님,<br>오늘도 연습해볼까요?</div>'+
+    noticeCardHTML()+
 
     '<div class="card" style="margin-top:14px">'+
       '<div class="row"><div class="sub">남은 연습권</div><div class="spacer"></div>'+
@@ -1465,6 +1502,7 @@ function renderMe(){
         '<div class="sub" style="color:'+r.color+'">'+r.name+'</div></div></div>';
     }).join('') : '<div class="empty">아직 기록이 없어요</div>')+
     '</div></div>'+
+    (isAdmin() ? noticeAdminCard() : '')+
     (isAdmin() ? parkingAdminCard() : '')+
     '<div class="foot" style="padding-top:26px">'+
       '리듬 하우스 · 경기 용인시 기흥구 농서동 455, 3층 345호'+
@@ -1575,6 +1613,150 @@ function stat(n,label,color){
   return '<div class="card" style="flex:1;padding:13px 0;text-align:center">'+
     '<div class="num" style="font-size:23px;line-height:1'+(color?';color:'+color:'')+'">'+n+'</div>'+
     '<div class="sub" style="margin-top:6px">'+label+'</div></div>';
+}
+
+/* ===================== 안내 서랍 =====================
+   관리자가 주제별로 적어 둔 안내(주소 · 주차 · 와이파이 · 출입문 등)를
+   회원 홈 맨 위에 서랍처럼 보여준다. 제목만 보이고, 누르면 펼쳐진다.
+   config/notices 문서 하나에 목록으로 담긴다 (보안 규칙상 등록 회원만 읽음). */
+
+const NOTICE_ICONS = ['📍','🚗','📶','🔑','📢','🥁','🕘','☎️','💳','⚠️','☕','📌'];
+
+function saveOpen(){ try{ localStorage.setItem('rh-open-notices', JSON.stringify([...openNotices])); }catch(_){} }
+function ntToggle(id){
+  if(openNotices.has(id)) openNotices.delete(id); else openNotices.add(id);
+  saveOpen();
+  // 다시 그리지 않고 그 칸만 열고 닫는다 (스크롤이 튀지 않게)
+  document.querySelectorAll('.nitem[data-nid="'+id+'"]').forEach(el=> el.classList.toggle('open', openNotices.has(id)));
+}
+/** 주소·전화번호를 누를 수 있게 */
+function linkify(t){
+  return esc(t)
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[^\d])(0\d{1,2}-\d{3,4}-\d{4})(?!\d)/g, '$1<a href="tel:$2">$2</a>');
+}
+function noticeCardHTML(){
+  const list = notices.filter(n=> n && n.show !== false && (n.title || n.body));
+  if(!list.length) return '';
+  const chev = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '+
+               'stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+  return '<div class="notice-box">'+
+    '<div class="nhead"><span>📌 리듬 하우스 안내</span><div class="spacer"></div><span class="muted">눌러서 펼치기</span></div>'+
+    list.map(n=>{
+      const open = openNotices.has(n.id);
+      const first = n.hidePv ? '눌러서 보기' : (String(n.body||'').split('\n').find(x=> x.trim()) || '');
+      return '<div class="nitem'+(open?' open':'')+'" data-nid="'+esc(n.id)+'">'+
+        '<button class="nbtn" data-act="ntToggle" data-id="'+esc(n.id)+'">'+
+          '<span class="ic">'+esc(n.icon||'📌')+'</span>'+
+          '<span class="tt">'+esc(n.title||'안내')+
+            (first ? '<span class="pv" style="display:block">'+esc(first)+'</span>' : '')+'</span>'+
+          chev+
+        '</button>'+
+        '<div class="nbody"><div class="tx">'+linkify(n.body||'')+'</div>'+
+          (n.body ? '<button class="cp" data-act="ntCopy" data-id="'+esc(n.id)+'">복사</button>' : '')+
+        '</div>'+
+      '</div>';
+    }).join('')+
+  '</div>';
+}
+function ntCopy(id){
+  const n = notices.find(x=> x.id === id);
+  if(!n) return;
+  const t = String(n.body||'').trim();
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=> toast('복사했어요')).catch(()=> toast(t));
+  else toast(t);
+}
+
+/* ── 관리자: 내 정보 → 안내 관리 ── */
+function noticeAdminCard(){
+  const rows = notices.map((n,i)=>
+    '<div class="nadm">'+
+      '<span style="font-size:17px">'+esc(n.icon||'📌')+'</span>'+
+      '<span class="tt">'+esc(n.title||'(제목 없음)')+(n.show===false?'<span class="off">숨김</span>':'')+
+        (n.hidePv?'<span class="off">🔒 내용 가림</span>':'')+'</span>'+
+      '<button class="btn sm" data-act="ntMove" data-id="'+esc(n.id)+'" data-n="-1"'+(i===0?' disabled':'')+'>↑</button>'+
+      '<button class="btn sm" data-act="ntMove" data-id="'+esc(n.id)+'" data-n="1"'+(i===notices.length-1?' disabled':'')+'>↓</button>'+
+      '<button class="btn sm" data-act="ntEdit" data-id="'+esc(n.id)+'">수정</button>'+
+    '</div>').join('');
+  return '<div class="sec"><span>회원 안내</span><span class="muted">홈 맨 위에 보여요</span></div>'+
+    '<div class="card">'+
+      (notices.length ? rows
+        : '<div class="sub muted" style="line-height:1.7">아직 안내가 없어요. 기본 항목(주소 · 주차 · 와이파이 · 출입문)으로 시작해 보세요.</div>'+
+          '<button class="btn" style="width:100%;height:44px;margin-top:12px" data-act="ntSeed">기본 4개 항목 만들기</button>')+
+      '<button class="btn sm primary" style="width:100%;height:42px;margin-top:12px" data-act="ntEdit">＋ 안내 추가</button>'+
+    '</div>';
+}
+async function saveNotices(items, msg){
+  try{
+    await setDoc(doc(db,'config','notices'), { items, updatedAt: serverTimestamp() });
+    if(msg) toast(msg);
+    return true;
+  }catch(e){ console.error(e); toast('저장하지 못했어요'); return false; }
+}
+function ntId(){ return 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function ntSeed(){
+  saveNotices([
+    { id:ntId(), icon:'📍', title:'연습실 주소', body:'경기 용인시 기흥구 농서동 455, 3층 345호', show:true },
+    { id:ntId(), icon:'🚗', title:'주차 안내',   body:'건물 주차장 이용 · 연습·레슨 예약이 있는 날 홈 화면에서 2시간 무료 등록', show:true },
+    { id:ntId(), icon:'📶', title:'와이파이',     body:'이름: \n비밀번호: ', show:true, hidePv:true },
+    { id:ntId(), icon:'🔑', title:'출입문 비밀번호', body:'', show:true, hidePv:true }
+  ], '기본 항목을 만들었어요. 수정을 눌러 내용을 채워 주세요');
+}
+function ntMove(id, dir){
+  const i = notices.findIndex(n=> n.id === id), j = i + dir;
+  if(i < 0 || j < 0 || j >= notices.length) return;
+  const items = notices.slice();
+  [items[i], items[j]] = [items[j], items[i]];
+  saveNotices(items);
+}
+function noticeForm(id){
+  const n = id ? notices.find(x=> x.id === id) : null;
+  let icon = (n && n.icon) || '📌';
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal" style="max-width:460px">'+
+      '<h3>'+(n ? '안내 수정' : '안내 추가')+'</h3>'+
+      '<div class="col" style="margin-top:14px">'+
+        '<div><label>아이콘</label><div class="icpick" id="ntIcons">'+
+          NOTICE_ICONS.map(ic=> '<button type="button" data-ic="'+ic+'" class="'+(ic===icon?'on':'')+'">'+ic+'</button>').join('')+
+        '</div></div>'+
+        '<div><label for="ntTitle">제목</label><input id="ntTitle" value="'+esc(n?n.title:'')+'" placeholder="예) 와이파이"></div>'+
+        '<div><label for="ntBody">내용</label>'+
+          '<textarea id="ntBody" rows="7" placeholder="여러 줄로 적어도 돼요. 링크와 전화번호는 누를 수 있게 바뀌어요.">'+
+          esc(n?n.body:'')+'</textarea></div>'+
+        '<label style="display:flex;align-items:center;gap:8px;margin:2px 0 0;color:var(--cream)">'+
+          '<input type="checkbox" id="ntShow" style="width:18px;height:18px"'+((!n || n.show!==false)?' checked':'')+'>'+
+          '<span>회원 홈에 보이기</span></label>'+
+        '<label style="display:flex;align-items:center;gap:8px;margin:0;color:var(--cream)">'+
+          '<input type="checkbox" id="ntHide" style="width:18px;height:18px"'+((n && n.hidePv)?' checked':'')+'>'+
+          '<span>닫혀 있을 때 내용 숨기기 <span class="muted">(비밀번호 등)</span></span></label>'+
+        '<div class="row" style="gap:9px;margin-top:8px">'+
+          '<button class="btn" style="flex:1;height:48px" id="ntCancel">취소</button>'+
+          '<button class="btn primary" style="flex:1;height:48px" id="ntSave">저장</button>'+
+        '</div>'+
+        (n ? '<button class="btn" style="height:44px;color:var(--red-l);border-color:#5A2A26" id="ntDel">이 안내 삭제</button>' : '')+
+      '</div>'+
+    '</div></div>';
+  host.querySelectorAll('#ntIcons button').forEach(b=> b.onclick = ()=>{
+    icon = b.dataset.ic;
+    host.querySelectorAll('#ntIcons button').forEach(x=> x.classList.toggle('on', x===b));
+  });
+  host.querySelector('#ntCancel').onclick = closeModal;
+  host.querySelector('#ntSave').onclick = async ()=>{
+    const title = host.querySelector('#ntTitle').value.trim();
+    const body  = host.querySelector('#ntBody').value.replace(/\s+$/,'');
+    if(!title){ toast('제목을 입력해 주세요'); return; }
+    const item = { id: n ? n.id : ntId(), icon, title, body,
+                   show: host.querySelector('#ntShow').checked,
+                   hidePv: host.querySelector('#ntHide').checked };
+    const items = n ? notices.map(x=> x.id===n.id ? item : x) : notices.concat([item]);
+    if(await saveNotices(items, '저장했어요')) closeModal();
+  };
+  if(n) host.querySelector('#ntDel').onclick = ()=>{
+    closeModal();
+    ask({ title:'이 안내를 지울까요?', body: esc(n.title||''), ok:'삭제', danger:true,
+      onOk: ()=> saveNotices(notices.filter(x=> x.id !== n.id), '지웠어요') });
+  };
 }
 
 /* ===================== 주차 2시간 무료 등록 =====================
@@ -2618,6 +2800,11 @@ async function handle(d){
     case 'monFilter': monFilter = d.f; renderMonitor(); break;
     case 'openExternal': openExternal(); break;
     case 'copyLink':  copyLink(); break;
+    case 'ntToggle':  ntToggle(d.id); break;
+    case 'ntCopy':    ntCopy(d.id); break;
+    case 'ntEdit':    noticeForm(d.id || null); break;
+    case 'ntMove':    ntMove(d.id, Number(d.n)); break;
+    case 'ntSeed':    ntSeed(); break;
   }
 }
 
