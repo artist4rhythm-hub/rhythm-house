@@ -370,6 +370,19 @@ textarea:focus{outline:none;border-color:var(--black-room)}
 .inapp b{font-family:var(--f-head);color:#FFE9BF}
 .inapp .btn{margin-top:12px;width:100%;height:46px}
 
+/* ---------- 내 연습 ---------- */
+.mygrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+.mybox{background:var(--deep);border:1px solid var(--line-soft);border-radius:14px;padding:13px 14px;min-width:0}
+.mybox .k{font-size:11.5px;color:var(--dim)}
+.mybox .v{font-family:var(--f-head);font-size:20px;line-height:1.25;margin-top:5px}
+.mybox .a{font-size:11.5px;color:var(--mute);margin-top:4px}
+.mybox .d{font-size:11.5px;margin-top:3px}
+.mybox .d.up{color:#7FD08F}.mybox .d.down{color:var(--red-l)}
+@media(min-width:1100px){ .mygrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px} }
+.pf-sum{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--deep);
+  border:1px solid var(--line-soft);font-size:13px;line-height:1.7;color:var(--dim)}
+.pf-sum b{color:var(--cream);font-family:var(--f-head);font-weight:400}
+
 /* ---------- 안내 서랍 ---------- */
 .notice-box{margin-top:14px;background:var(--surf);border:1px solid var(--line);border-radius:18px;overflow:hidden}
 .notice-box .nhead{display:flex;align-items:center;padding:13px 16px 9px;font-size:12px;color:var(--dim)}
@@ -561,7 +574,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v22 · 2026-10-15';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v23 · 2026-10-18';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -1554,7 +1567,8 @@ function renderToday(){
         bg='#2B2518'; ink='#E3CFA6'; bd='1px solid #8A7442';
         label = nameOf(b)+' 레슨 '+timeText(b);
       } else {
-        bg=r.fill; ink=r.ink; bd='0'; label=nameOf(b);
+        bg=r.fill; ink=r.ink; bd='0';
+        label = nameOf(b) + (b.startAt ? ' · '+b.startAt+'~'+b.endAt : '');
       }
       return '<div class="ev" data-act="admCancel" data-id="'+b.id+'" style="top:'+(b.hour*HOUR_PX+3)+
         'px;height:'+(HOUR_PX-6)+'px;background:'+bg+';border:'+bd+';color:'+ink+'">'+
@@ -2225,6 +2239,162 @@ if(/KAKAOTALK/i.test(navigator.userAgent || '')){
   if(!jumped) setTimeout(openExternal, 400);
 }
 
+/* ===================== 관리자 · 내 연습 (분 단위) =====================
+   연습실은 1시간 칸으로 잡되, 실제 연습 시간은 분 단위로 적어 둔다.
+   22:10~23:40 → 22시·23시 두 칸을 잡고, 칸마다 그 안에서 연습한 분(50분·40분)을 남긴다.
+   같은 연습에서 잡은 칸들은 sess 로 묶인다. 통계는 이 분을 더해서 센다. */
+
+function hmToMin(t){ const [h,m] = String(t||'').split(':').map(Number); return (h||0)*60 + (m||0); }
+function myPracticeForm(init, b){
+  // b가 있으면 이미 잡아둔 내 연습을 고친다
+  let sessDocs = [];
+  if(b){
+    sessDocs = b.sess
+      ? myBookings.filter(x=> x.sess === b.sess)
+      : [b];
+    const hs = sessDocs.map(x=> x.hour);
+    init = {
+      roomId: b.roomId, date: b.date,
+      start: b.startAt || pad(Math.min(...hs))+':00',
+      end:   b.endAt   || (Math.max(...hs)===23 ? '24:00' : pad(Math.max(...hs)+1)+':00')
+    };
+  }
+  const host = document.getElementById('modalHost');
+  host.innerHTML =
+    '<div class="overlay"><div class="modal" style="max-width:420px">'+
+      '<h3>'+(b ? '내 연습 수정' : '내 연습 잡기')+'</h3>'+
+      '<p>연습실은 1시간 칸으로 잡히고, 통계에는 <b>실제로 적은 분</b>만큼 들어가요.</p>'+
+      '<div class="col" style="margin-top:14px">'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1"><label for="pfRoom">연습실</label><select id="pfRoom">'+
+            ROOMS.map(r=> '<option value="'+r.id+'"'+(r.id===init.roomId?' selected':'')+'>'+r.name+'</option>').join('')+
+          '</select></div>'+
+          '<div style="flex:1.2"><label for="pfDate">날짜</label><input id="pfDate" type="date" value="'+init.date+'"></div>'+
+        '</div>'+
+        '<div class="row" style="gap:9px">'+
+          '<div style="flex:1"><label for="pfStart">시작</label><input id="pfStart" type="time" step="300" value="'+init.start+'"></div>'+
+          '<div style="flex:1"><label for="pfEnd">끝</label><input id="pfEnd" type="'+(init.end==='24:00'?'text':'time')+'" step="300" value="'+init.end+'"></div>'+
+        '</div>'+
+        '<div class="pf-sum" id="pfSum"></div>'+
+        '<div class="row" style="gap:9px;margin-top:6px">'+
+          '<button class="btn" style="flex:1;height:48px" id="pfCancel">닫기</button>'+
+          '<button class="btn primary" style="flex:1;height:48px" id="pfSave">'+(b?'저장':'잡기')+'</button>'+
+        '</div>'+
+        (b ? '<button class="btn" style="height:44px;color:var(--red-l);border-color:#5A2A26" id="pfDel">이 연습 취소 (잡은 칸 모두 비우기)</button>' : '')+
+      '</div></div></div>';
+
+  const $ = id=> host.querySelector(id);
+  const read = ()=>{
+    const s = hmToMin($('#pfStart').value), e = hmToMin($('#pfEnd').value);
+    return { room:$('#pfRoom').value, date:$('#pfDate').value, s, e,
+             startAt:$('#pfStart').value, endAt:$('#pfEnd').value };
+  };
+  const plan = v=>{
+    const hours = [];
+    for(let h = Math.floor(v.s/60); h*60 < v.e && h < 24; h++) hours.push(h);
+    return hours.map(h=> ({ h, min: Math.max(0, Math.min(v.e, (h+1)*60) - Math.max(v.s, h*60)) }));
+  };
+  const show = ()=>{
+    const v = read();
+    if(!(v.e > v.s) || v.e > 1440){ $('#pfSum').innerHTML = '<span class="rose">끝 시각이 시작보다 뒤여야 해요 (자정을 넘길 수 없어요)</span>'; return; }
+    const pl = plan(v);
+    $('#pfSum').innerHTML =
+      '연습실 <b>'+pad(pl[0].h)+':00 – '+(pl[pl.length-1].h===23?'24':pad(pl[pl.length-1].h+1))+':00</b> ('+pl.length+'칸) 확보<br>'+
+      '실제 연습 <b>'+fmtHM(v.e - v.s)+'</b> → 통계에 이만큼 들어가요';
+  };
+  ['#pfStart','#pfEnd','#pfRoom','#pfDate'].forEach(id=> $(id).oninput = show);
+  show();
+  $('#pfCancel').onclick = closeModal;
+
+  $('#pfSave').onclick = async ()=>{
+    const v = read();
+    if(!(v.e > v.s) || v.e > 1440){ toast('시간을 확인해 주세요'); return; }
+    const pl = plan(v);
+    const r = roomOf(v.room);
+    const sess = (b && b.sess) || ('s' + Date.now().toString(36));
+    const keepIds = new Set(sessDocs.map(x=> x.id));
+    const newIds  = pl.map(x=> bookingId(v.room, v.date, x.h));
+    try{
+      // 새로 필요한 칸이 다른 예약으로 차 있지 않은지 먼저 확인한다
+      for(const id of newIds){
+        if(keepIds.has(id)) continue;
+        const snap = await getDoc(doc(db,'bookings',id));
+        if(snap.exists()){ toast(id.split('_')[2]+'시 칸은 이미 차 있어요'); return; }
+      }
+      for(const x of pl){
+        await setDoc(doc(db,'bookings', bookingId(v.room, v.date, x.h)), {
+          roomId:v.room, roomName:r.name, date:v.date, hour:x.h,
+          memberId: myMid(), kind:'practice', usesCredit:false, addedByAdmin:true,
+          sess, startAt:v.startAt, endAt:v.endAt, practiceMin:x.min,
+          createdAt: serverTimestamp()
+        });
+      }
+      // 줄어든 칸은 비운다
+      for(const id of keepIds){ if(!newIds.includes(id)) await deleteDoc(doc(db,'bookings',id)); }
+      logAct(b ? 'move' : 'book', { roomId:v.room, date:v.date, hour:pl[0].h, mid:myMid(), kind:'practice',
+        detail:'내 연습 '+v.startAt+'~'+v.endAt+' ('+fmtHM(v.e - v.s)+')' });
+      closeModal();
+      toast(b ? '고쳤어요 · '+fmtHM(v.e - v.s) : '연습실을 잡았어요 · '+fmtHM(v.e - v.s));
+    }catch(e){ console.error(e); toast('저장하지 못했어요'); }
+  };
+
+  if(b) $('#pfDel').onclick = ()=>{
+    closeModal();
+    ask({ title:'이 연습을 취소할까요?', body: fmtDate(init.date)+' '+init.start+'~'+init.end+'<br>잡아둔 '+sessDocs.length+'칸을 모두 비웁니다.',
+      ok:'취소하기', onOk: async ()=>{
+        try{
+          for(const x of sessDocs) await deleteDoc(doc(db,'bookings',x.id));
+          logAct('cancel', { roomId:init.roomId, date:init.date, hour:sessDocs[0].hour, mid:myMid(), kind:'practice',
+            detail:'내 연습 '+init.start+'~'+init.end });
+          toast('취소했어요');
+        }catch(e){ toast('취소하지 못했어요'); }
+      }});
+  };
+}
+
+/** 통계 맨 위 — 관리자 본인의 연습 시간 (이번 주 · 지난주 · 이번 달 · 지난달) */
+function myPracticeCard(){
+  const now = new Date();
+  const today = ymd(now);
+  const mine = myBookings.filter(b=> b.kind==='practice' && slotTime(b.date,b.hour) < now);
+  const sumMin = (a,z)=> mine.filter(b=> b.date>=a && b.date<=z).reduce((t,b)=> t + pMin(b), 0);
+  const daysBetween = (a,z)=> Math.round((parseYmd(z) - parseYmd(a))/86400000) + 1;
+
+  const wk0 = startOfWeek(today);
+  const wkPrevS = ymd(addDays(parseYmd(wk0), -7)), wkPrevE = ymd(addDays(parseYmd(wk0), -1));
+  const mo0 = today.slice(0,8)+'01';
+  const pm  = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const moPrevS = ymd(pm), moPrevE = ymd(new Date(now.getFullYear(), now.getMonth(), 0));
+
+  const cells = [
+    { k:'이번 주',  a:wk0,     z:today,   days: daysBetween(wk0, today) },
+    { k:'지난주',   a:wkPrevS, z:wkPrevE, days: 7 },
+    { k:'이번 달',  a:mo0,     z:today,   days: now.getDate() },
+    { k:'지난달',   a:moPrevS, z:moPrevE, days: daysBetween(moPrevS, moPrevE) }
+  ].map(c=> ({ ...c, min: sumMin(c.a, c.z) }))
+   .map(c=> ({ ...c, avg: c.min / c.days }));
+
+  const diff = (cur, prev)=>{
+    const d = Math.round(cur.avg - prev.avg);
+    if(!prev.min && !cur.min) return '';
+    if(d === 0) return '<div class="d">하루 평균 같음</div>';
+    return '<div class="d '+(d>0?'up':'down')+'">하루 평균 '+(d>0?'▲ ':'▼ ')+fmtHM(Math.abs(d))+
+           ' <span class="muted">('+(cur===cells[0]?'지난주':'지난달')+' 대비)</span></div>';
+  };
+  const box = (c, cmp)=>
+    '<div class="mybox"><div class="k">'+c.k+' <span class="muted">· '+c.days+'일</span></div>'+
+      '<div class="v">'+(c.min ? fmtHM(c.min) : '0분')+'</div>'+
+      '<div class="a">하루 평균 '+fmtHM(c.avg)+'</div>'+
+      (cmp ? diff(c, cmp) : '')+
+    '</div>';
+
+  return '<div class="card" style="margin-top:12px;padding:15px 16px">'+
+    '<div class="row"><div class="num" style="font-size:15px">🥁 내 연습</div><div class="spacer"></div>'+
+      '<span class="sub muted">분 단위 실제 연습 기준</span></div>'+
+    '<div class="mygrid">'+ box(cells[0], cells[1]) + box(cells[1]) + box(cells[2], cells[3]) + box(cells[3]) +'</div>'+
+  '</div>';
+}
+
 /* ===================== 통계 =====================
    예약 1칸 = 1시간이다. 지나간 '연습' 예약만 센다.
    관리자는 기간 안의 예약 전체를 한 번 가져와 회원별로 나누고,
@@ -2266,9 +2436,26 @@ function statOnly(list){
   return who ? list.filter(b=> b.memberId === who) : list;
 }
 
+/** 이 예약의 실제 연습 분 — 분 단위로 적은 관리자 연습은 그 값, 나머지는 60분 */
+function pMin(b){
+  if(!b || b.kind !== 'practice') return 0;
+  return (typeof b.practiceMin === 'number') ? b.practiceMin : 60;
+}
+function sumH(list){ return list.reduce((a,b)=> a + pMin(b), 0) / 60; }
+/** 29 → "29", 28.5 → "28.5" */
+function fmtH(x){ const r = Math.round(x*10)/10; return Number.isInteger(r) ? String(r) : r.toFixed(1); }
+/** 분 → "1시간 30분" */
+function fmtHM(min){
+  min = Math.round(min);
+  const h = Math.floor(min/60), m = min % 60;
+  if(!h) return m+'분';
+  return h+'시간'+(m ? ' '+m+'분' : '');
+}
+
 function summarize(list){
   const today = ymd(new Date());
-  const days  = new Set(list.map(b=>b.date));
+  const hrs   = sumH(list);
+  const days  = new Set(list.filter(b=> pMin(b) > 0).map(b=>b.date));
   let start = statFrom();
   if(list.length){
     const first = list.map(b=>b.date).sort()[0];
@@ -2277,14 +2464,14 @@ function summarize(list){
   const span = Math.max(1,
     Math.round((parseYmd(today) - parseYmd(start)) / 86400000) + 1);
   return {
-    hours : list.length,
+    hours : hrs,
     active: days.size,
     span  : span,
-    weekly: list.length / (Math.max(7, span) / 7),
-    perAct: days.size ? list.length / days.size : 0,
-    perDay: list.length / span,
-    paid  : list.filter(usesCredit).length,
-    free  : list.filter(b=> !usesCredit(b)).length
+    weekly: hrs / (Math.max(7, span) / 7),
+    perAct: days.size ? hrs / days.size : 0,
+    perDay: hrs / span,
+    paid  : sumH(list.filter(usesCredit)),
+    free  : sumH(list.filter(b=> !usesCredit(b)))
   };
 }
 function n1(x){ return (Math.round(x*10)/10).toFixed(1); }
@@ -2303,7 +2490,7 @@ function barsHTML(vals, labels, o){
       const showL = !o.every || (i % o.every === 0) || i===vals.length-1;
       const hpc   = v ? Math.max(5, Math.round(v/max*100)) : 2;
       return '<div class="cbar'+mark+'">'+
-        (nums ? '<b class="'+(v?'':'off')+'">'+v+'</b>' : '')+
+        (nums ? '<b class="'+(v?'':'off')+'">'+fmtH(v)+'</b>' : '')+
         '<i class="'+cls+'" style="height:'+hpc+'%"></i>'+
         '<span class="'+(showL?'':'off')+'">'+labels[i]+'</span></div>';
     }).join('')+
@@ -2317,19 +2504,19 @@ function weekChartHTML(list){
   for(let i=n-1; i>=0; i--) weeks.push(ymd(addDays(parseYmd(w0), -7*i)));
   const vals = weeks.map(ws=>{
     const we = ymd(addDays(parseYmd(ws), 6));
-    return list.filter(b=> b.date>=ws && b.date<=we).length;
+    return sumH(list.filter(b=> b.date>=ws && b.date<=we));
   });
   const labels = weeks.map(ws=>{ const d=parseYmd(ws); return (d.getMonth()+1)+'/'+d.getDate(); });
   return barsHTML(vals, labels, { every: n>13 ? 4 : 1, mark: n-1 });
 }
 function dowChartHTML(list){
   const v = [0,0,0,0,0,0,0];
-  list.forEach(b=> v[parseYmd(b.date).getDay()]++);
+  list.forEach(b=> v[parseYmd(b.date).getDay()] += pMin(b)/60);
   return barsHTML(v, ['일','월','화','수','목','금','토'], { mark: new Date().getDay() });
 }
 function hourChartHTML(list){
   const v = new Array(24).fill(0);
-  list.forEach(b=> v[b.hour]++);
+  list.forEach(b=> v[b.hour] += pMin(b)/60);
   return barsHTML(v, v.map((_,i)=>pad(i)), { every:3, mark:new Date().getHours() });
 }
 
@@ -2355,7 +2542,7 @@ function memberStatHTML(every){
         (r.m.role==='admin'
           ? '<span class="chip" style="height:19px;font-size:10px;padding:0 8px">강사</span>' : '')+
         '<div class="spacer"></div>'+
-        '<div class="num gold" style="font-size:17px">'+r.s.hours+
+        '<div class="num gold" style="font-size:17px">'+fmtH(r.s.hours)+
           '<span class="sub" style="margin-left:3px">시간</span></div>'+
       '</div>'+
       '<div class="row sub muted" style="gap:7px;margin-top:5px;font-size:11px">'+
@@ -2382,6 +2569,7 @@ function renderStats(){
       (who ? '<button class="chip on" data-act="statWho" data-w="">'+
                esc(who.name||'회원')+' 보는 중 ✕</button>' : '')+
     '</div>'+
+    (admin ? myPracticeCard() : '')+
     '<div class="modes" style="margin-top:12px">'+
       [[28,'최근 4주'],[84,'최근 12주'],[365,'최근 1년']].map(([d,l])=>
         '<button data-act="statRange" data-d="'+d+'" class="'+
@@ -2401,7 +2589,7 @@ function renderStats(){
 
   const tiles =
     '<div class="statgrid">'+
-      statBox(s.hours, '시간', statRangeLabel()+' 연습 총량')+
+      statBox(fmtH(s.hours), '시간', statRangeLabel()+' 연습 총량')+
       statBox(n1(s.weekly), '시간', '주 평균', '#E3CFA6')+
       statBox(s.active, '일', '연습하러 나온 날')+
       statBox(n1(s.perAct), '시간', '나온 날 하루 평균')+
@@ -2411,15 +2599,15 @@ function renderStats(){
         '<span>기간 전체로는 하루 평균 <b class="gold" style="font-weight:400">'+
           n1(s.perDay)+'시간</b></span>'+
         '<span class="muted">·</span>'+
-        '<span>연습권 차감 '+s.paid+'시간</span>'+
+        '<span>연습권 차감 '+fmtH(s.paid)+'시간</span>'+
         '<span class="muted">·</span>'+
-        '<span class="muted">미차감 '+s.free+'시간</span>'+
+        '<span class="muted">미차감 '+fmtH(s.free)+'시간</span>'+
         (les.length ? '<span class="muted">·</span><span>레슨 '+les.length+'회</span>' : '')+
       '</div></div>';
 
   const rooms = ROOMS.map(r=>{
-    const n = list.filter(b=> b.roomId===r.id).length;
-    const pc = s.hours ? Math.round(n/s.hours*100) : 0;
+    const n = fmtH(sumH(list.filter(b=> b.roomId===r.id)));
+    const pc = s.hours ? Math.round(Number(n)/s.hours*100) : 0;
     return '<div style="flex:1;min-width:0">'+
       '<div class="row sub" style="gap:6px"><span style="color:'+r.color+'">'+r.name+'</span>'+
         '<div class="spacer"></div><span class="num">'+n+'시간</span></div>'+
@@ -2966,10 +3154,8 @@ function admSlot(roomId, hour){
 
   host.querySelector('#admClose').onclick = closeModal;
 
-  host.querySelector('#admMine').onclick = async ()=>{
-    closeModal();
-    await writeSlot(roomId, hour, { kind:'practice', memberId: myMid(), usesCredit:false });
-    toast('연습실을 잡았어요');
+  host.querySelector('#admMine').onclick = ()=>{
+    myPracticeForm({ roomId, date: selDate, start: pad(hour)+':00', end: (hour===23 ? '24:00' : pad(hour+1)+':00') });
   };
   host.querySelector('#admBlock').onclick = async ()=>{
     closeModal();
@@ -3017,6 +3203,7 @@ async function writeSlot(roomId, hour, extra){
 function admCancel(id){
   const b = dayBookings.find(x=>x.id===id);
   if(!b) return;
+  if(b.kind==='practice' && b.memberId===myMid()){ myPracticeForm(null, b); return; }
   const who = b.kind==='lesson' ? ('레슨 · '+nameOf(b)) : nameOf(b);
   const refundNote = usesCredit(b)
     ? '<br><br><span class="muted">회원의 연습권 1시간이 돌아갑니다.</span>' : '';
