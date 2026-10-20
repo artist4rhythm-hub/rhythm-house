@@ -574,7 +574,7 @@ const LESSON_TERM    = 4;   // 한 기수에 들어가는 레슨 횟수
 const BOOK_AHEAD_DAYS = 14; // 예약 가능 기간
 const LESSON_QUOTA    = 4;  // 월 기본 레슨 횟수
 const LESSON_FEE      = 100000; // 월 기본 레슨비
-const APP_VERSION     = 'v23 · 2026-10-18';   // 화면 아래에 표시된다
+const APP_VERSION     = 'v24 · 2026-10-20';   // 화면 아래에 표시된다
 
 /* ===================== 상태 ===================== */
 let ME = null;              // 내 회원 문서
@@ -605,6 +605,8 @@ let statRows  = [];         // (관리자) 그 기간의 예약 전체
 let statState = 'idle';     // idle | load | done | fail
 let statKey   = '';         // 지금 담겨 있는 자료의 시작일 (같으면 다시 안 부른다)
 let parkingUrl = '';        // 주차 중계 서버 주소 (config/app 에 관리자가 넣는다)
+let calOn      = false;     // 구글 캘린더 연동 켜짐 (config/app.calSync)
+let calTimer   = null, calLast = null;
 let notices    = [];        // 안내 항목 (config/notices) — 주소 · 주차 · 와이파이 · 출입문 등
 let unsubNotices = null;
 let openNotices = new Set((()=>{ try{ return JSON.parse(localStorage.getItem('rh-open-notices')||'[]'); }catch(_){ return []; } })());
@@ -889,7 +891,8 @@ onAuthStateChanged(auth, async (user)=>{
     s=>{ notices = (s.exists() && Array.isArray(s.data().items)) ? s.data().items : []; render(); },
     ()=>{});
   unsubConfig = onSnapshot(doc(db,'config','app'),
-    s=>{ parkingUrl = (s.exists() && s.data().parkingUrl) || ''; render(); },
+    s=>{ parkingUrl = (s.exists() && s.data().parkingUrl) || '';
+         calOn = !!(s.exists() && s.data().calSync); render(); },
     ()=>{});
   // 오늘 내 주차 등록 기록
   unsubParkMine = onSnapshot(
@@ -1515,6 +1518,7 @@ function renderMe(){
         '<div class="sub" style="color:'+r.color+'">'+r.name+'</div></div></div>';
     }).join('') : '<div class="empty">아직 기록이 없어요</div>')+
     '</div></div>'+
+    (isAdmin() ? calendarAdminCard() : '')+
     (isAdmin() ? noticeAdminCard() : '')+
     (isAdmin() ? parkingAdminCard() : '')+
     '<div class="foot" style="padding-top:26px">'+
@@ -1627,6 +1631,54 @@ function stat(n,label,color){
   return '<div class="card" style="flex:1;padding:13px 0;text-align:center">'+
     '<div class="num" style="font-size:23px;line-height:1'+(color?';color:'+color:'')+'">'+n+'</div>'+
     '<div class="sub" style="margin-top:6px">'+label+'</div></div>';
+}
+
+/* ===================== 구글 캘린더 연동 (관리자) =====================
+   관리자가 예약을 잡거나 고치거나 지우면, 2초 뒤 중계 서버에 '맞춰 줘'를 보낸다.
+   서버가 관리자 본인 연습 + 모든 레슨을 구글 캘린더와 똑같이 맞춘다.
+   여러 번 연달아 바꿔도 마지막 한 번만 보낸다. */
+function calKick(){
+  if(!isAdmin() || !calOn || !parkingUrl) return;
+  clearTimeout(calTimer);
+  calTimer = setTimeout(()=> calSyncNow(false), 2000);
+}
+async function calSyncNow(manual){
+  if(!parkingUrl){ if(manual) toast('먼저 주차 연동의 서버 주소를 넣어 주세요'); return; }
+  if(manual) toast('구글 캘린더를 맞추는 중…');
+  const r = await callParking({ cal:'sync' });
+  calLast = { at: new Date(), ...r };
+  if(manual) info({ title: r.ok ? '구글 캘린더와 맞췄어요' : '캘린더 연동 실패', body: esc(r.message || '') });
+  else if(!r.ok) toast('구글 캘린더 연동 실패 · ' + (r.message || ''));
+  if(page === 'me') renderMe();
+}
+async function calToggle(){
+  const next = !calOn;
+  try{
+    await setDoc(doc(db,'config','app'), { calSync: next }, { merge:true });
+    calOn = next;
+    toast(next ? '구글 캘린더 연동을 켰어요' : '구글 캘린더 연동을 껐어요');
+    if(next) setTimeout(()=> calSyncNow(true), 600);   // 켜자마자 한 번 맞춰 본다
+  }catch(e){ toast('저장하지 못했어요'); }
+}
+function calendarAdminCard(){
+  const last = calLast
+    ? (calLast.ok ? '마지막 맞춤 '+pad(calLast.at.getHours())+':'+pad(calLast.at.getMinutes())+' · 일정 '+(calLast.total||0)+'개'
+                  : '마지막 시도 실패 · '+esc(calLast.message||''))
+    : '';
+  return '<div class="sec"><span>구글 캘린더 연동</span><span class="muted">관리자 전용</span></div>'+
+    '<div class="card">'+
+      '<div class="row" style="gap:8px">'+
+        '<span class="chip '+(calOn?'paid':'unpaid')+'" style="height:22px;font-size:11px">'+(calOn?'켜짐':'꺼짐')+'</span>'+
+        '<div class="sub muted" style="flex:1;min-width:0">'+(last || '내 연습 · 레슨 일정을 구글 캘린더에 실시간으로')+'</div>'+
+      '</div>'+
+      '<div class="row" style="gap:8px;margin-top:12px">'+
+        '<button class="btn sm" style="flex:1" data-act="calToggle"'+(parkingUrl?'':' disabled')+'>'+(calOn?'끄기':'켜기')+'</button>'+
+        '<button class="btn sm primary" style="flex:1" data-act="calNow"'+(parkingUrl?'':' disabled')+'>지금 맞추기</button>'+
+      '</div>'+
+      '<div class="sub muted" style="margin-top:10px;line-height:1.6">'+
+        '켜 두면 예약을 잡거나 고치거나 지울 때마다 자동으로 반영돼요. '+
+        '지난 2주 ~ 앞으로 4개월이 맞춰져요.</div>'+
+    '</div>';
 }
 
 /* ===================== 안내 서랍 =====================
@@ -1994,6 +2046,7 @@ function deviceName(){
 function logAct(type, o){
   o = o || {};
   if(!ME) return;
+  if(isAdmin() && type !== 'login') calKick();
   let target = '';
   if(o.mid){
     if(o.mid === myMid()) target = ME.name || '';
@@ -2993,6 +3046,8 @@ async function handle(d){
     case 'ntEdit':    noticeForm(d.id || null); break;
     case 'ntMove':    ntMove(d.id, Number(d.n)); break;
     case 'ntSeed':    ntSeed(); break;
+    case 'calNow':    calSyncNow(true); break;
+    case 'calToggle': calToggle(); break;
   }
 }
 
